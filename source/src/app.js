@@ -29,7 +29,10 @@ function profileDialog(after){
   $('[data-y]',m).onclick=()=>{ const n=$('#pfn',m).value.trim(); if(!n){toast('Nhập biệt danh nhé');return;} const p=newProfile(n,emo); m.remove(); after&&after(p); };
   setTimeout(()=>$('#pfn',m).focus(),50);
 }
-function addProgress(p,ch,ok){ if(!p) return; p.pr[ch]=p.pr[ch]||{ok:0,n:0}; p.pr[ch].n++; if(ok) p.pr[ch].ok++; }
+function addProgress(p,ch,ok,src,lv){ if(!p) return 0; p.pr[ch]=p.pr[ch]||{ok:0,n:0}; p.pr[ch].n++; if(ok) p.pr[ch].ok++;
+  if(src!=='prac') return 0; // chỉ luyện tập / thi thử / bài tính mới tính vào điều kiện giải & ELO luyện tập
+  p.pp=p.pp||{}; p.pp[ch]=p.pp[ch]||{ok:0,n:0}; p.pp[ch].n++; if(ok) p.pp[ch].ok++;
+  const r={1:900,2:1100,3:1300}[lv]||1000; const d=Math.round(8*((ok?1:0)-1/(1+Math.pow(10,(r-p.elo)/400)))); p.elo=Math.max(100,p.elo+d); return d; }
 
 // ----- Ngân hàng câu hỏi
 const SRC={sgk:'SGK KNTT',dp:'Đột phá tư duy',hsg:'Đề HSG',khac:'Khác'};
@@ -121,6 +124,7 @@ function viewHome(v){
      return `<button class="tile" data-ch="${c.id}"><div class="row between"><b>${c.ic} ${c.short}</b><span class="small muted">${cnt} câu</span></div><div class="small muted" style="margin:2px 0 6px">${c.name}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="small muted">${pr.n?`Đúng ${pr.ok}/${pr.n} (${pct}%)`:'Chưa luyện'}</div></button>`;}).join('')}
   </div></div>
   ${p?`<div class="card"><h3>Thành tích đấu trường</h3><div class="row"><span class="chip">🏅 ELO ${p.elo}</span><span class="chip">✅ Thắng ${p.w}</span><span class="chip">🤝 Hoà ${p.d}</span><span class="chip">❌ Thua ${p.l}</span></div></div>`:''}
+  ${p?medalCaseHTML(p):''}
   <div class="card small muted">Câu hỏi có sẵn do ứng dụng tự soạn theo chương trình KHTN 7 (KNTT) và theo dạng bài thường gặp trong sách nâng cao, đề HSG; không chép nguyên văn từ sách hay đề nào. Muốn luyện đúng câu trong <b>SGK KNTT</b>, <b>Đột phá tư duy</b> hay <b>đề HSG</b> của trường, hãy nhập vào mục ✍️ Câu của tôi và chọn nguồn tương ứng.</div>`;
   $$('[data-go]',v).forEach(b=>b.onclick=()=>go(b.dataset.go));
   $$('[data-ch]',v).forEach(b=>b.onclick=()=>{ PRF.chs=[b.dataset.ch]; go('practice'); });
@@ -148,9 +152,9 @@ function viewPractice(v){
    <div id="pex"></div><div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn ghost sm" id="pstop">Kết thúc</button><button class="btn pri hide" id="pnext">Câu tiếp →</button></div></div>
    <p class="small muted">Mẹo: bấm phím 1 2 3 4 để chọn, Enter để sang câu.</p>`;
   const choose=i=>{ if(PS.picked!==null) return; PS.picked=i; const ok=i===q.ans; if(ok) PS.ok++; beep(ok);
-    const p=curP(); addProgress(p,q.ch,ok); save();
+    const p=curP(); const de=addProgress(p,q.ch,ok,'prac',q.lv); save();
     $$('.opt',v).forEach((b,j)=>{ b.disabled=true; if(j===q.ans) b.classList.add('ok'); else if(j===i) b.classList.add('bad'); });
-    $('#pex').innerHTML=`<div class="ex">${ok?'✅ Chính xác!':'❌ Chưa đúng. Đáp án: <b>'+'ABCD'[q.ans]+'</b>'}<br>${esc(q.ex||'')}</div>`; $('#pnext').classList.remove('hide'); };
+    $('#pex').innerHTML=`<div class="ex">${ok?'✅ Chính xác!':'❌ Chưa đúng. Đáp án: <b>'+'ABCD'[q.ans]+'</b>'}${p&&de?` <span class="chip" style="margin-left:6px">ELO ${de>0?'+':''}${de} → ${p.elo}</span>`:''}<br>${esc(q.ex||'')}</div>`; $('#pnext').classList.remove('hide'); };
   $$('.opt',v).forEach(b=>b.onclick=()=>choose(+b.dataset.i));
   $('#pnext').onclick=()=>{ PS.i++; PS.picked=null; viewPractice(v); };
   $('#pstop').onclick=()=>{ PS.deck=PS.deck.slice(0,PS.i+(PS.picked!==null?1:0)); PS.i=PS.deck.length; viewPractice(v); };
@@ -177,7 +181,7 @@ function viewExam(v){
   }
   const d=ES.deck;
   if(ES.done){ const sc=d.reduce((s,q,i)=>s+(ES.ans[i]===q.ans?1:0),0); const ten=Math.round(sc/d.length*100)/10;
-    const p=curP(); if(!ES.saved){ d.forEach((q,i)=>addProgress(p,q.ch,ES.ans[i]===q.ans)); logAct(p,'Thi thử',{ch:EXF.chs.map(chName).join(', ')||'Trộn chương',r:String(ten).replace('.',',')+' điểm ('+sc+'/'+d.length+')'}); save(); ES.saved=true; }
+    const p=curP(); if(!ES.saved){ d.forEach((q,i)=>addProgress(p,q.ch,ES.ans[i]===q.ans,'prac',q.lv)); logAct(p,'Thi thử',{ch:EXF.chs.map(chName).join(', ')||'Trộn chương',r:String(ten).replace('.',',')+' điểm ('+sc+'/'+d.length+')'}); save(); ES.saved=true; }
     v.innerHTML=`<div class="card" style="text-align:center"><div class="muted">Điểm</div><div class="big">${String(ten).replace('.',',')}<span class="muted" style="font-size:20px">/10</span></div><p>Đúng ${sc}/${d.length} câu</p><button class="btn pri" id="enew">Làm đề khác</button></div>
     ${d.map((q,i)=>`<div class="card"><div class="small muted">Câu ${i+1} · ${chName(q.ch)} · ${lvTag(q)}</div><div class="qbox" style="font-size:16px">${esc(q.q)}</div>
      ${q.opts.map((o,j)=>`<div class="opt ${j===q.ans?'ok':ES.ans[i]===j?'bad':''}" style="margin-bottom:6px"><b class="k">${'ABCD'[j]}</b><span>${esc(o)}</span></div>`).join('')}

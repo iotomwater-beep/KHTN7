@@ -39,7 +39,7 @@ function calcPrac(v){
    ${S.res!==undefined?`<div class="ex" style="background:${S.res?'var(--ok-soft)':'var(--bad-soft)'}">${S.res?'✅ Đúng rồi!':S.res===false&&S.input?'❌ Chưa đúng.':'👀 Bạn đã xem lời giải.'}</div>${stepsHTML(c)}<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn pri" id="cnext">Bài tiếp →</button></div>`:''}
    <div class="row" style="margin-top:10px"><button class="btn ghost sm" id="cstop">Kết thúc</button></div></div>`;
   const inp=$('#cin');
-  const finish=ok=>{ S.res=ok; if(ok) S.ok++; beep(ok); addProgress(curP(),c.tr,ok); save(); calcPrac(v); };
+  const finish=ok=>{ S.res=ok; if(ok) S.ok++; beep(ok); addProgress(curP(),c.tr,ok,'prac',c.lv); save(); calcPrac(v); };
   if(S.res===undefined){ inp.focus(); inp.oninput=()=>S.input=inp.value;
     $('#cchk').onclick=()=>{ const r=calcCheck(c,inp.value); if(r===null){ toast('Nhập một con số nhé'); return; } finish(r); };
     $('#csol').onclick=()=>{ S.input=''; finish(false); };
@@ -50,7 +50,7 @@ function calcPrac(v){
 function calcExam(v){
   const S=CS;
   if(S.done){ const res=S.list.map((c,i)=>calcCheck(c,S.ans[i])===true); const sc=res.filter(Boolean).length; const ten=sc*10/S.list.length;
-    const p=curP(); if(!S.saved){ S.saved=1; S.list.forEach((c,i)=>addProgress(p,c.tr,res[i])); logAct(p,'Đề tự luận',{ch:[...new Set(S.list.map(x=>CALC_TR[x.tr].name))].join(', '),r:NF(ten,1)+' điểm ('+sc+'/'+S.list.length+')'}); save(); }
+    const p=curP(); if(!S.saved){ S.saved=1; S.list.forEach((c,i)=>addProgress(p,c.tr,res[i],'prac',c.lv)); logAct(p,'Đề tự luận',{ch:[...new Set(S.list.map(x=>CALC_TR[x.tr].name))].join(', '),r:NF(ten,1)+' điểm ('+sc+'/'+S.list.length+')'}); save(); }
     v.innerHTML=`<div class="card" style="text-align:center"><div class="muted">Điểm phần đáp số</div><div class="big">${NF(ten,1)}<span class="muted" style="font-size:20px">/10</span></div><p class="small muted">Mỗi bài ${NF(10/S.list.length,1)} điểm. Thầy cô chấm thêm phần trình bày trên giấy theo lời giải bên dưới.</p><button class="btn pri" id="enew">Làm đề khác</button></div>
     ${S.list.map((c,i)=>`<div class="card"><div class="row between"><b>Bài ${i+1}</b><span>${res[i]?'✅':'❌'} Bạn ghi: <b>${esc(S.ans[i]||'(bỏ trống)')}</b></span></div><div style="margin:6px 0">${calcTags(c)}</div><div class="qbox" style="font-size:16px">${esc(c.q)}</div>${stepsHTML(c)}</div>`).join('')}`;
     $('#enew').onclick=()=>{ CS=null; viewCalc(v); }; return; }

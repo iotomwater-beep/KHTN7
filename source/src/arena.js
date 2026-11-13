@@ -43,7 +43,7 @@ class Match{
     this.upd();
   }
   reveal(){ if(this.phase!=='q') return; this.clearT(); this.phase='rev';
-    this.history.push({q:this.q,winner:this.winner,ans:this.ans});
+    this.history.push({q:this.q,winner:this.winner,ans:this.ans,t0:this.deadline-this.limit});
     this.upd(); this.timers.push(setTimeout(()=>this.next(),this.cfg.revealMs||3200)); }
   finish(){
     this.clearT(); this.phase='end'; const {A,B}=this.score; const res=A>B?'A':B>A?'B':'D';
@@ -54,7 +54,7 @@ class Match{
     for(const s of this.seatIds()){ const st=this.seats[s]; if(st.kind==='bot') continue;
       const exp=s[0]==='A'?eA:1-eA, sc=s[0]==='A'?sA:1-sA; const d=Math.round(32*(sc-exp)); this.delta[s]=d;
       if(st.pid){ const p=DB.profiles.find(x=>x.id===st.pid); if(p){ p.elo=Math.max(100,p.elo+d); if(sc===1)p.w++; else if(sc===.5)p.d++; else p.l++;
-        this.history.forEach(h=>{ if(h.ans[s]) addProgress(p,h.q.ch,h.ans[s].ok); });
+        this.history.forEach(h=>{ if(h.ans[s]) addProgress(p,h.q.ch,h.ans[s].ok,'arena'); });
         logAct(p,'Đấu '+(this.seatIds().length>2?'2 vs 2':'1 vs 1'),{r:(sc===1?'Thắng ':sc===.5?'Hoà ':'Thua ')+(s[0]==='A'?A+'–'+B:B+'–'+A)}); } } }
     save(); this.result=res; this.upd(); this.cfg.onEnd&&this.cfg.onEnd(this);
   }
