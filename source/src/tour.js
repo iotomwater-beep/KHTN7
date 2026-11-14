@@ -52,13 +52,15 @@ function advance(t){ // tạo vòng loại trực tiếp khi đủ điều kiệ
 }
 const STN={G:'Vòng bảng',SF:'Bán kết',F:'🏆 Chung kết','3P':'🥉 Tranh hạng 3'};
 
-function viewTour(v){
+function viewTour(v){ if(!TV.playing) musicStop();
   if(AM&&AM.phase!=='end'&&TV.playing){ AM.upd(); return; }
   const t=curTour();
   if(!t) return tourList(v);
   advance(t);
   const days=[...new Set(t.matches.map(m=>m.day))].sort((a,b)=>a-b);
-  const R=syncAwards(t); const champ=R?awardsHTML(t,R):''; const F=0, P3=0;
+  const R=syncAwards(t); const champ=R?awardsHTML(t,R):'';
+  if(R&&!t.cel){ t.cel=1; save(); const c=t.players[R.places[0].i]; setTimeout(()=>celebrate(`Chúc mừng ${t.mode==='doi'?'đội '+c.name.replace('&','và'):c.name} đã giành chức vô địch ${t.name}!`,true),300); }
+  if(!R&&t.cel){ delete t.cel; save(); } const F=0, P3=0;
   const champOld=F?`<div class="champ" style="margin-bottom:14px"><div class="big">🏆 ${pName(t,F.s1>F.s2?F.p1:F.p2)}</div><p>Vô địch ${esc(t.name)}</p><div class="row" style="justify-content:center"><span class="chip">🥈 ${pName(t,F.s1>F.s2?F.p2:F.p1)}</span>${P3?`<span class="chip">🥉 ${pName(t,P3.s1>P3.s2?P3.p1:P3.p2)}</span>`:''}</div></div>`:'';
   const table=g=>{ const s=standings(t,g); return `<div class="card"><h3>${t.one?'Bảng xếp hạng':'Bảng '+g}</h3><div style="overflow-x:auto"><table><tr><th>#</th><th class="l">Người chơi</th><th>Tr</th><th>T</th><th>H</th><th>B</th><th>Ghi</th><th>Mất</th><th>HS</th><th>Điểm</th></tr>
     ${s.map((r,k)=>`<tr class="${k<(t.one?2:2)?'q1':''}"><td>${k+1}</td><td class="l">${pName(t,r.i)}${r.tb?' <span class="small muted" title="Xếp theo đối đầu / điểm ghi / bốc thăm">*</span>':''}</td><td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.F}</td><td>${r.A}</td><td>${r.F-r.A>0?'+':''}${r.F-r.A}</td><td><b>${r.pts}</b></td></tr>`).join('')}</table></div>

@@ -1,7 +1,7 @@
 import pathlib
 s=pathlib.Path('src')
 css=(s/'style.css').read_text()
-js='\n'.join((s/f).read_text() for f in ['bank.js','gen.js','calcbank.js','app.js','arena.js','online.js','tour.js','awards.js','import.js','class.js','share.js','calcui.js','main.js'])
+js='\n'.join((s/f).read_text() for f in ['bank.js','gen.js','calcbank.js','app.js','music.js','arena.js','online.js','tour.js','awards.js','import.js','class.js','share.js','calcui.js','main.js'])
 html=f'''<!DOCTYPE html>
 <html lang="vi">
 <head>

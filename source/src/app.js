@@ -92,9 +92,10 @@ function render(){
   const p=curP();
   $('#hdr').innerHTML=`<div class="logo">KHTN<span>·</span>7 <span>Đấu trường</span></div>
    <div class="row">${p?`<span class="chip" id="swp">${p.emo} ${esc(p.name)} · ${p.role&&p.role!=='hs'&&typeof ROLE_B!=='undefined'?ROLE_B[p.role]:'ELO '+p.elo}</span>`:`<button class="btn sm pri" id="swp">＋ Tạo hồ sơ</button>`}
-   <button class="chip" id="snd" title="Âm thanh">${DB.sound?'🔊':'🔇'}</button></div>`;
+   <button class="chip" id="mus" title="Nhạc nền khi đấu">${DB.music?'🎵':'<s>🎵</s>'}</button><button class="chip" id="snd" title="Âm thanh, nhạc chiến thắng và lời chúc mừng">${DB.sound?'🔊':'🔇'}</button></div>`;
   $('#swp').onclick=()=>p?switchProfile():profileDialog(()=>render());
   $('#snd').onclick=()=>{DB.sound=!DB.sound;save();render();};
+  $('#mus').onclick=e=>{DB.music=!DB.music; if(!DB.music) musicStop(); save(); e.currentTarget.innerHTML=DB.music?'🎵':'<s>🎵</s>'; toast(DB.music?'Đã bật nhạc nền khi đấu':'Đã tắt nhạc nền');};
   $('#tabs').innerHTML=TABS.map(([k,n])=>`<button class="${k===TAB?'on':''}" data-t="${k}">${n}</button>`).join('');
   $$('#tabs button').forEach(b=>b.onclick=()=>go(b.dataset.t));
   const v=$('#view'); v.innerHTML='';

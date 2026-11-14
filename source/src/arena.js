@@ -66,6 +66,8 @@ class Match{
 function seatLabel(st){ return `${st.emo||'🙂'} ${esc(st.name)}`; }
 function renderMatch(el,m,opts={}){
   const ids=m.seatIds(); const q=m.q;
+  { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
+    matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
   let body='';
   if(m.phase==='end'){
@@ -120,7 +122,7 @@ function startLocalMatch(v,seatVals,cfg,onEnd){
   AM=m; off=matchKeys(m); cleanup=()=>{ m.stop(); off&&off(); AM=null; };
   m.start(); return true;
 }
-function viewArena(v){
+function viewArena(v){ musicStop();
   if(AM&&AM.phase!=='end'){ AM.upd(); return; }
   const p=curP();
   if(!DB.profiles.length){ v.innerHTML=`<div class="card"><h2>⚔️ Đấu trường</h2><p>Tạo hồ sơ người chơi trước nhé.</p><button class="btn pri" id="mk">＋ Tạo hồ sơ</button></div>`; $('#mk').onclick=()=>profileDialog(()=>render()); return; }

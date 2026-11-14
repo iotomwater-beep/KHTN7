@@ -909,9 +909,10 @@ function render(){
   const p=curP();
   $('#hdr').innerHTML=`<div class="logo">KHTN<span>·</span>7 <span>Đấu trường</span></div>
    <div class="row">${p?`<span class="chip" id="swp">${p.emo} ${esc(p.name)} · ${p.role&&p.role!=='hs'&&typeof ROLE_B!=='undefined'?ROLE_B[p.role]:'ELO '+p.elo}</span>`:`<button class="btn sm pri" id="swp">＋ Tạo hồ sơ</button>`}
-   <button class="chip" id="snd" title="Âm thanh">${DB.sound?'🔊':'🔇'}</button></div>`;
+   <button class="chip" id="mus" title="Nhạc nền khi đấu">${DB.music?'🎵':'<s>🎵</s>'}</button><button class="chip" id="snd" title="Âm thanh, nhạc chiến thắng và lời chúc mừng">${DB.sound?'🔊':'🔇'}</button></div>`;
   $('#swp').onclick=()=>p?switchProfile():profileDialog(()=>render());
   $('#snd').onclick=()=>{DB.sound=!DB.sound;save();render();};
+  $('#mus').onclick=e=>{DB.music=!DB.music; if(!DB.music) musicStop(); save(); e.currentTarget.innerHTML=DB.music?'🎵':'<s>🎵</s>'; toast(DB.music?'Đã bật nhạc nền khi đấu':'Đã tắt nhạc nền');};
   $('#tabs').innerHTML=TABS.map(([k,n])=>`<button class="${k===TAB?'on':''}" data-t="${k}">${n}</button>`).join('');
   $$('#tabs button').forEach(b=>b.onclick=()=>go(b.dataset.t));
   const v=$('#view'); v.innerHTML='';
@@ -1079,6 +1080,50 @@ function parseBulk(txt,base){
 function copyText(t,msg){ const done=()=>toast(msg||'Đã sao chép'); try{ navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done)); }catch(e){ fallbackCopy(t,done); } }
 function fallbackCopy(t,done){ const m=modal(`<h3>Sao chép thủ công</h3><p class="small muted">Bấm vào ô, Ctrl+A rồi Ctrl+C.</p><textarea style="min-height:160px">${esc(t)}</textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-x>Đóng</button></div>`); $('textarea',m).select(); $('[data-x]',m).onclick=()=>m.remove(); }
 
+// ===================== NHẠC NỀN · NHẠC CHIẾN THẮNG · LỜI CHÚC MỪNG · PHÁO GIẤY =====================
+// Nhạc tự tổng hợp bằng Web Audio (không dùng bản nhạc có bản quyền). 🎵 bật/tắt nhạc nền, 🔊 bật/tắt hiệu ứng + giọng đọc.
+if(DB.music===undefined) DB.music=true;
+const MU={on:false,timer:null,step:0,next:0,fast:false,cur:null,cel:null,gain:null};
+function muCtx(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); return AC; }catch(e){ return null; } }
+const NOTE=n=>440*Math.pow(2,(n-69)/12);
+function tone(ctx,out,f,t,d,type,vol){ const o=ctx.createOscillator(),g=ctx.createGain(); o.type=type; o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+d); o.connect(g); g.connect(out); o.start(t); o.stop(t+d+0.02); }
+let NOISE=null; function hat(ctx,out,t,vol){ if(!NOISE){ NOISE=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate); const d=NOISE.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; }
+  const s=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain(); s.buffer=NOISE; f.type='highpass'; f.frequency.value=7000; g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04); s.connect(f); f.connect(g); g.connect(out); s.start(t); }
+// vòng hoà âm Am – F – C – G, bass + rải hợp âm + hi-hat
+const PROG=[[57,60,64],[53,57,60],[48,52,55],[55,59,62]];
+function muSchedule(){ const ctx=AC; if(!ctx||!MU.on) return; const spb=60/(MU.fast?150:118)/4; // 1 phách 16
+  while(MU.next<ctx.currentTime+0.15){ const st=MU.step%64, bar=Math.floor(st/16), ch=PROG[bar], t=MU.next, s16=st%16;
+    if(s16%4===0) tone(ctx,MU.gain,NOTE(ch[0]-24+(s16===8?12:0)),t,spb*3.2,'triangle',0.5);
+    const arp=[0,1,2,1,0,2,1,2][s16%8]; if(s16%2===0||MU.fast) tone(ctx,MU.gain,NOTE(ch[arp]+12),t,spb*0.9,'square',0.07);
+    if(s16%2===1) hat(ctx,MU.gain,t,MU.fast?0.18:0.1);
+    if(s16===0&&bar%2===0) tone(ctx,MU.gain,NOTE(ch[2]+24),t,spb*6,'sine',0.08);
+    MU.next+=spb; MU.step++; } }
+function musicStart(){ if(!DB.music) return; const ctx=muCtx(); if(!ctx) return; if(MU.on) return;
+  MU.gain=ctx.createGain(); MU.gain.gain.value=0.12; MU.gain.connect(ctx.destination); MU.on=true; MU.step=0; MU.next=ctx.currentTime+0.05; MU.timer=setInterval(muSchedule,40); }
+function musicStop(){ if(!MU.on) return; MU.on=false; clearInterval(MU.timer); try{ const g=MU.gain; g.gain.setTargetAtTime(0.0001,AC.currentTime,0.15); setTimeout(()=>g.disconnect(),800); }catch(e){} }
+function fanfare(big){ if(!DB.sound) return; const ctx=muCtx(); if(!ctx) return; const out=ctx.createGain(); out.gain.value=0.22; out.connect(ctx.destination); const t0=ctx.currentTime+0.05;
+  const mel=big?[[67,0,.18],[72,.18,.18],[76,.36,.18],[79,.54,.36],[76,.9,.18],[79,1.08,1.1]]:[[72,0,.15],[76,.15,.15],[79,.3,.15],[84,.45,.9]];
+  mel.forEach(([n,a,d])=>{ tone(ctx,out,NOTE(n),t0+a,d+0.25,'square',0.18); tone(ctx,out,NOTE(n-12),t0+a,d+0.25,'triangle',0.3); });
+  const end=t0+mel[mel.length-1][1]; [60,64,67,72].forEach(n=>tone(ctx,out,NOTE(n),end,1.3,'sawtooth',0.05));
+  for(let i=0;i<(big?28:16);i++) hat(ctx,out,end+0.2+i*0.045+Math.random()*0.03,0.25*Math.random()); // tiếng vỗ tay
+}
+function sayVi(text){ if(!DB.sound||!('speechSynthesis' in window)) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='vi-VN'; u.rate=0.95; u.pitch=1.1;
+  const vs=speechSynthesis.getVoices(); const vi=vs.find(v=>/^vi/i.test(v.lang)&&/natural|online|hoaimy/i.test(v.name))||vs.find(v=>/^vi/i.test(v.lang)); if(vi) u.voice=vi; setTimeout(()=>speechSynthesis.speak(u),900); }catch(e){} }
+if('speechSynthesis' in window){ try{ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices(); }catch(e){} }
+function confetti(big){ const c=document.createElement('canvas'); c.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999'; document.body.appendChild(c);
+  const W=c.width=innerWidth, H=c.height=innerHeight, g=c.getContext('2d'), cols=['#0f8a5f','#f2b705','#e8505b','#3b82f6','#a855f7','#22c55e'];
+  const ps=Array.from({length:big?220:130},()=>({x:Math.random()*W,y:-20-Math.random()*H*0.4,vx:(Math.random()-.5)*4,vy:2+Math.random()*4,r:4+Math.random()*6,a:Math.random()*6,va:(Math.random()-.5)*.3,c:cols[Math.random()*cols.length|0]}));
+  const t0=performance.now(); const fr=now=>{ g.clearRect(0,0,W,H); ps.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; p.a+=p.va; g.save(); g.translate(p.x,p.y); g.rotate(p.a); g.fillStyle=p.c; g.fillRect(-p.r,-p.r/2,p.r*2,p.r); g.restore(); });
+    if(now-t0<(big?4500:3200)) requestAnimationFrame(fr); else c.remove(); }; requestAnimationFrame(fr); }
+function celebrate(text,big){ musicStop(); fanfare(big); confetti(big); if(text) sayVi(text); }
+// gọi mỗi lần vẽ trận đấu: tự bật nhạc khi đấu, đổi nhịp nhanh lúc "điểm quyết định", mừng chiến thắng khi kết thúc
+function matchMusic(key,phase,score,target,winText){
+  if(phase==='end'){ if(MU.cel!==key){ MU.cel=key; celebrate(winText); } return; }
+  if(MU.cur!==key){ MU.cur=key; musicStop(); }
+  MU.fast=!!(score&&target&&Math.max(score.A||0,score.B||0)>=target-1);
+  if(phase!=='ready') musicStart(); }
+
 // ===================== ĐẤU TRƯỜNG: BỘ MÁY TRẬN ĐẤU =====================
 // Ghế: A1, A2 (đội A) – B1, B2 (đội B). Loại ghế: human (trên máy này), bot, remote (online).
 const BOT_NAMES=['Bot Mầm','Bot Chồi','Bot Lá','Bot Hoa','Bot Quả','Bot Cây','Bot Rừng','Bot Đại Ngàn'];
@@ -1147,6 +1192,8 @@ class Match{
 function seatLabel(st){ return `${st.emo||'🙂'} ${esc(st.name)}`; }
 function renderMatch(el,m,opts={}){
   const ids=m.seatIds(); const q=m.q;
+  { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
+    matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
   let body='';
   if(m.phase==='end'){
@@ -1201,7 +1248,7 @@ function startLocalMatch(v,seatVals,cfg,onEnd){
   AM=m; off=matchKeys(m); cleanup=()=>{ m.stop(); off&&off(); AM=null; };
   m.start(); return true;
 }
-function viewArena(v){
+function viewArena(v){ musicStop();
   if(AM&&AM.phase!=='end'){ AM.upd(); return; }
   const p=curP();
   if(!DB.profiles.length){ v.innerHTML=`<div class="card"><h2>⚔️ Đấu trường</h2><p>Tạo hồ sơ người chơi trước nhé.</p><button class="btn pri" id="mk">＋ Tạo hồ sơ</button></div>`; $('#mk').onclick=()=>profileDialog(()=>render()); return; }
@@ -1354,6 +1401,10 @@ function guestView(v){
   if(r.st==='end'&&r.res&&r.res.d&&r.res.d[FBUID]!==undefined){ const key=ON.code+':'+r.res.id; if(!DB.applied[key]){ DB.applied[key]=1; const d=r.res.d[FBUID]; p.elo=Math.max(100,p.elo+d);
     const myTeam=mySeat?mySeat[0]:null; if(myTeam){ if(r.res.r==='D')p.d++; else if(r.res.r===myTeam)p.w++; else p.l++; } save(); } }
   let body='';
+  if(r.st==='end'&&r.res){ const my=mySeat?mySeat[0]:null; const nmT=t=>Object.keys(seats).filter(s=>s[0]===t).map(s=>seats[s].n).join(' và ');
+    matchMusic(ON.code+':'+r.res.id,'end',null,null,r.res.r==='D'?'Hai đội hoà nhau!':(my&&r.res.r===my?'Chúc mừng! Bạn đã chiến thắng!':`Chúc mừng ${nmT(r.res.r)} đã chiến thắng!`)); }
+  else if(g&&g.q) matchMusic(ON.code+':g',g.ph,g.sc,r.target,'');
+  else musicStop();
   if(r.st==='lobby'||!g){ body=`<div style="text-align:center;padding:24px"><div class="big">⏳</div><p>Đã vào phòng. Chờ trọng tài xếp ghế và bắt đầu…</p><p class="small muted">${Object.values(r.players||{}).map(x=>esc(x.e+' '+x.n)).join(' · ')}</p></div>`; }
   else if(r.st==='end'&&r.res){ const res=r.res; const my=mySeat?mySeat[0]:null; const d=res.d&&res.d[FBUID];
     body=`<div class="champ"><div class="big">${res.r==='D'?'🤝 Hoà':my?(res.r===my?'🏆 Thắng rồi!':'💪 Thua sát nút!'):'Đội '+res.r+' thắng'}</div><p>Tỉ số ${res.sc.A} – ${res.sc.B}</p>${d!==undefined?`<span class="chip">ELO ${d>=0?'+':''}${d} → ${p.elo}</span>`:''}<p class="small muted">Chờ trọng tài mở trận tiếp…</p></div>`; }
@@ -1429,13 +1480,15 @@ function advance(t){ // tạo vòng loại trực tiếp khi đủ điều kiệ
 }
 const STN={G:'Vòng bảng',SF:'Bán kết',F:'🏆 Chung kết','3P':'🥉 Tranh hạng 3'};
 
-function viewTour(v){
+function viewTour(v){ if(!TV.playing) musicStop();
   if(AM&&AM.phase!=='end'&&TV.playing){ AM.upd(); return; }
   const t=curTour();
   if(!t) return tourList(v);
   advance(t);
   const days=[...new Set(t.matches.map(m=>m.day))].sort((a,b)=>a-b);
-  const R=syncAwards(t); const champ=R?awardsHTML(t,R):''; const F=0, P3=0;
+  const R=syncAwards(t); const champ=R?awardsHTML(t,R):'';
+  if(R&&!t.cel){ t.cel=1; save(); const c=t.players[R.places[0].i]; setTimeout(()=>celebrate(`Chúc mừng ${t.mode==='doi'?'đội '+c.name.replace('&','và'):c.name} đã giành chức vô địch ${t.name}!`,true),300); }
+  if(!R&&t.cel){ delete t.cel; save(); } const F=0, P3=0;
   const champOld=F?`<div class="champ" style="margin-bottom:14px"><div class="big">🏆 ${pName(t,F.s1>F.s2?F.p1:F.p2)}</div><p>Vô địch ${esc(t.name)}</p><div class="row" style="justify-content:center"><span class="chip">🥈 ${pName(t,F.s1>F.s2?F.p2:F.p1)}</span>${P3?`<span class="chip">🥉 ${pName(t,P3.s1>P3.s2?P3.p1:P3.p2)}</span>`:''}</div></div>`:'';
   const table=g=>{ const s=standings(t,g); return `<div class="card"><h3>${t.one?'Bảng xếp hạng':'Bảng '+g}</h3><div style="overflow-x:auto"><table><tr><th>#</th><th class="l">Người chơi</th><th>Tr</th><th>T</th><th>H</th><th>B</th><th>Ghi</th><th>Mất</th><th>HS</th><th>Điểm</th></tr>
     ${s.map((r,k)=>`<tr class="${k<(t.one?2:2)?'q1':''}"><td>${k+1}</td><td class="l">${pName(t,r.i)}${r.tb?' <span class="small muted" title="Xếp theo đối đầu / điểm ghi / bốc thăm">*</span>':''}</td><td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.F}</td><td>${r.A}</td><td>${r.F-r.A>0?'+':''}${r.F-r.A}</td><td><b>${r.pts}</b></td></tr>`).join('')}</table></div>

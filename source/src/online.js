@@ -126,6 +126,10 @@ function guestView(v){
   if(r.st==='end'&&r.res&&r.res.d&&r.res.d[FBUID]!==undefined){ const key=ON.code+':'+r.res.id; if(!DB.applied[key]){ DB.applied[key]=1; const d=r.res.d[FBUID]; p.elo=Math.max(100,p.elo+d);
     const myTeam=mySeat?mySeat[0]:null; if(myTeam){ if(r.res.r==='D')p.d++; else if(r.res.r===myTeam)p.w++; else p.l++; } save(); } }
   let body='';
+  if(r.st==='end'&&r.res){ const my=mySeat?mySeat[0]:null; const nmT=t=>Object.keys(seats).filter(s=>s[0]===t).map(s=>seats[s].n).join(' và ');
+    matchMusic(ON.code+':'+r.res.id,'end',null,null,r.res.r==='D'?'Hai đội hoà nhau!':(my&&r.res.r===my?'Chúc mừng! Bạn đã chiến thắng!':`Chúc mừng ${nmT(r.res.r)} đã chiến thắng!`)); }
+  else if(g&&g.q) matchMusic(ON.code+':g',g.ph,g.sc,r.target,'');
+  else musicStop();
   if(r.st==='lobby'||!g){ body=`<div style="text-align:center;padding:24px"><div class="big">⏳</div><p>Đã vào phòng. Chờ trọng tài xếp ghế và bắt đầu…</p><p class="small muted">${Object.values(r.players||{}).map(x=>esc(x.e+' '+x.n)).join(' · ')}</p></div>`; }
   else if(r.st==='end'&&r.res){ const res=r.res; const my=mySeat?mySeat[0]:null; const d=res.d&&res.d[FBUID];
     body=`<div class="champ"><div class="big">${res.r==='D'?'🤝 Hoà':my?(res.r===my?'🏆 Thắng rồi!':'💪 Thua sát nút!'):'Đội '+res.r+' thắng'}</div><p>Tỉ số ${res.sc.A} – ${res.sc.B}</p>${d!==undefined?`<span class="chip">ELO ${d>=0?'+':''}${d} → ${p.elo}</span>`:''}<p class="small muted">Chờ trọng tài mở trận tiếp…</p></div>`; }
