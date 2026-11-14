@@ -149,8 +149,8 @@ function tourList(v){
     <p class="small muted" style="margin:6px 0 0">Để 0 là không giới hạn. ELO tăng khi luyện tập (📚 Luyện tập, 📝 Thi thử, 🧮 Bài tính): làm đúng câu khó được cộng nhiều hơn, sai thì bị trừ. Số câu đúng chỉ tính câu luyện tập thuộc các chương đã chọn ở bộ lọc trên (không chọn chương = mọi chương). Bạn chưa đủ điều kiện sẽ hiện ❌ và không vào giải được.</p></div>
    <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🧑‍⚖️ Trọng tài <span class="small muted">(tùy chọn)</span></h3>
     <label class="small"><input type="checkbox" id="trefon"> Bật quyền trọng tài</label>
-    <div class="row" id="trefw" style="display:none;margin-top:6px"><label class="small">Tên <input type="text" id="trefn" maxlength="30" value="Chú Cường" style="width:150px"></label><label class="small">Mã PIN <input type="text" id="trefp" inputmode="numeric" maxlength="6" placeholder="4–6 số" style="width:90px"></label><label class="small"><input type="checkbox" id="trefpl"> Trọng tài bấm bắt đầu trận ▶ Đấu</label></div>
-    <p class="small muted" style="margin:6px 0 0">Bật lên thì chỉ trọng tài (có PIN) được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải; mọi thao tác được ghi nhật ký. Bật/tắt lại được bất cứ lúc nào bằng nút 🧑‍⚖️ trong trang giải.</p></div>
+    <div class="row" id="trefw" style="display:none;margin-top:6px"><label class="small">Tên <input type="text" id="trefn" maxlength="30" value="Chú Cường" style="width:150px"></label><label class="small">Email trọng tài (Google) <input type="email" id="trefe" value="${esc((DB.refEmails||[]).join(', '))}" placeholder="email-cua-chu@gmail.com" style="width:230px"></label><label class="small">PIN dự phòng <input type="text" id="trefp" inputmode="numeric" maxlength="6" placeholder="4–6 số" style="width:90px"></label><label class="small"><input type="checkbox" id="trefpl"> Trọng tài bấm bắt đầu trận ▶ Đấu</label></div>
+    <p class="small muted" style="margin:6px 0 0">Bật lên thì chỉ trọng tài (đăng nhập Google đúng email, hoặc nhập PIN) được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải; mọi thao tác được ghi nhật ký. Bật/tắt lại được bất cứ lúc nào bằng nút 🧑‍⚖️ trong trang giải.</p></div>
    <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🎁 Giải thưởng</h3>
     <div class="grid g3">${[1,2,3].map(r=>`<label class="small">${PLACE[r].ic} ${PLACE[r].s}<input type="text" id="tpz${r}" maxlength="60" placeholder="${['','Ví dụ: 100.000đ + sách','Ví dụ: 50.000đ','Ví dụ: bộ bút'][r]}"></label>`).join('')}</div>
     <label class="small" style="display:block;margin-top:8px">Người ký giấy khen <input type="text" id="tsig" maxlength="30" value="Chú Cường" style="width:200px"></label>
@@ -170,7 +170,9 @@ function tourList(v){
     $('#tnames').value.split('\n').map(s=>s.trim()).filter(Boolean).forEach(n=>{ if(ps.some(p=>p.name.toLowerCase()===n.toLowerCase())) return; const pr=DB.profiles.find(x=>x.name.toLowerCase()===n.toLowerCase()); ps.push(pr?{name:pr.name,emo:pr.emo,elo:pr.elo,pid:pr.id}:{name:n.slice(0,16),emo:pick(EMOS),elo:1000}); });
     const rq=reqNow(); if(rq.elo||rq.ok){ const bad=ps.map(x=>({x,e:eligible(x.pid?DB.profiles.find(p=>p.id===x.pid):DB.profiles.find(p=>p.name.toLowerCase()===x.name.toLowerCase()),rq,chsNow())})).filter(o=>!o.e.ok);
       if(bad.length){ modal(`<h3>❌ Chưa đủ điều kiện tham gia</h3><p class="small muted">Yêu cầu: ${rq.elo?'ELO ≥ '+rq.elo:''}${rq.elo&&rq.ok?' và ':''}${rq.ok?'luyện đúng ≥ '+rq.ok+' câu':''}</p>${bad.map(o=>`<div class="mrow"><b>${esc(o.x.emo||'')} ${esc(o.x.name)}</b><span class="small">${o.e.why.join(', ')}</span></div>`).join('')}<p class="small">Các bạn này cần vào <b>📚 Luyện tập</b> thêm rồi mới đăng ký được. Bỏ chọn các bạn này, hoặc hạ điều kiện.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" data-x>Đã hiểu</button></div>`).querySelector('[data-x]').onclick=e=>e.target.closest('.modal').remove(); return; } }
-    let ref=null; if($('#trefon').checked){ const pn=$('#trefp').value.trim(); if(!/^\d{4,6}$/.test(pn)){ toast('Mã PIN trọng tài cần 4–6 chữ số'); return; } ref={name:$('#trefn').value.trim()||'Trọng tài',pin:pn,play:$('#trefpl').checked}; }
+    let ref=null; if($('#trefon').checked){ const pn=$('#trefp').value.trim(), ems=parseEmails($('#trefe').value); if(ems===null){ toast('Email trọng tài chưa đúng định dạng'); return; }
+      if(pn&&!/^\d{4,6}$/.test(pn)){ toast('Mã PIN trọng tài cần 4–6 chữ số'); return; } if(!pn&&!ems.length){ toast('Cần email trọng tài hoặc mã PIN'); return; }
+      if(ems.length) DB.refEmails=ems; ref={name:$('#trefn').value.trim()||'Trọng tài',pin:pn,emails:ems,play:$('#trefpl').checked}; }
     const doi=$('#tmode').value==='doi'; let entries=ps;
     if(doi){ if(ps.length%2){ toast('Giải Đôi cần số bạn chẵn – đang có '+ps.length+' bạn'); return; } if(ps.length<6){ toast('Giải Đôi cần ít nhất 6 bạn (3 đội)'); return; } if(ps.length>24){ toast('Tối đa 24 bạn (12 đội)'); return; }
       entries=makeTeams(ps,$('#tpair').value); }
@@ -188,19 +190,49 @@ function makeTeams(ps,how){ let a=[...ps], pairs=[];
   return pairs.map(([x,y])=>({name:`${x.name} & ${y.name}`,emo:(x.emo||'🙂')+(y.emo||'🙂'),elo:Math.round(((x.elo||1000)+(y.elo||1000))/2),members:[x,y]})); }
 
 // ---- Quyền trọng tài (tùy chọn): PIN khoá nhập/sửa kết quả, xử thua vắng mặt, nhật ký
+let REFAPP=null;
+async function refAuth(){ await fbInit(); REFAPP=REFAPP||firebase.apps.find(a=>a.name==='ref')||firebase.initializeApp(DB.fb||FB_DEFAULT,'ref'); const au=firebase.auth(REFAPP);
+  await new Promise(r=>{ const off=au.onAuthStateChanged(()=>{ off(); r(); }); }); return au; }
+function refEmailOk(t,em){ return !!em&&(t.ref.emails||[]).includes(String(em).toLowerCase()); }
+async function refCurEmail(){ try{ const au=await refAuth(); return au.currentUser&&au.currentUser.email?au.currentUser.email.toLowerCase():''; }catch(e){ return ''; } }
+function refErr(e){ const c=e&&e.code||''; if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request') return 'Đã đóng cửa sổ đăng nhập';
+  if(c==='auth/operation-not-allowed') return 'Firebase chưa bật đăng nhập Google (Authentication → Sign-in method → Google)';
+  if(c==='auth/unauthorized-domain') return 'Tên miền này chưa được cho phép trong Firebase (Authentication → Settings → Authorized domains)';
+  if(c==='auth/popup-blocked') return 'Trình duyệt chặn cửa sổ đăng nhập – cho phép pop-up rồi thử lại'; return 'Không đăng nhập được: '+(e&&e.message||e); }
 function refGate(t,ok){ if(!t||!t.ref||TV.ref===t.id) return ok();
-  const m=modal(`<h3>🧑‍⚖️ Trọng tài ${esc(t.ref.name)}</h3><p class="small muted">Nhập mã PIN trọng tài để tiếp tục. Mở khoá một lần, dùng đến khi rời trang giải.</p><input type="password" id="rq" inputmode="numeric" maxlength="6"><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost" data-x>Huỷ</button><button class="btn pri" data-y>Mở khoá</button></div>`);
-  const go=()=>{ if($('#rq',m).value===t.ref.pin){ TV.ref=t.id; m.remove(); ok(); const b=$('#tref'); if(b) b.innerHTML='🧑‍⚖️ 🔓 '+esc(t.ref.name); } else { toast('Sai mã PIN trọng tài'); $('#rq',m).value=''; } };
-  $('[data-x]',m).onclick=()=>m.remove(); $('[data-y]',m).onclick=go; $('#rq',m).onkeydown=e=>{ if(e.key==='Enter') go(); }; setTimeout(()=>$('#rq',m).focus(),50); }
+  const unlock=()=>{ TV.ref=t.id; ok(); const b=$('#tref'); if(b) b.innerHTML='🧑‍⚖️ 🔓 '+esc(t.ref.name); };
+  const hasEm=(t.ref.emails||[]).length, hasPin=!!t.ref.pin;
+  const show=()=>{ const m=modal(`<h3>🧑‍⚖️ Trọng tài ${esc(t.ref.name)}</h3><p class="small muted">Chỉ trọng tài mới được làm thao tác này. Mở khoá một lần, dùng đến khi rời trang giải.</p>
+     ${hasEm?`<button class="btn pri" data-g style="width:100%">🔑 Đăng nhập Google bằng email trọng tài</button><div class="small muted" id="rgm" style="margin-top:6px"></div>`:''}
+     ${hasEm&&hasPin?'<p class="small muted" style="text-align:center;margin:10px 0 4px">hoặc</p>':''}
+     ${hasPin?`<input type="password" id="rq" inputmode="numeric" maxlength="6" placeholder="Mã PIN trọng tài">`:''}
+     <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost" data-x>Huỷ</button>${hasPin?'<button class="btn pri" data-y>Mở khoá bằng PIN</button>':''}</div>`);
+    $('[data-x]',m).onclick=()=>m.remove();
+    if(hasPin){ const go=()=>{ if($('#rq',m).value===t.ref.pin){ m.remove(); unlock(); } else { toast('Sai mã PIN trọng tài'); $('#rq',m).value=''; } };
+      $('[data-y]',m).onclick=go; $('#rq',m).onkeydown=e=>{ if(e.key==='Enter') go(); }; if(!hasEm) setTimeout(()=>$('#rq',m).focus(),50); }
+    if(hasEm) $('[data-g]',m).onclick=async()=>{ const msg=$('#rgm',m); msg.textContent='Đang mở cửa sổ đăng nhập Google…';
+      try{ const au=await refAuth(); const pr=new firebase.auth.GoogleAuthProvider(); pr.setCustomParameters({prompt:'select_account'}); const r=await au.signInWithPopup(pr); const em=(r.user.email||'').toLowerCase();
+        if(refEmailOk(t,em)){ m.remove(); toast('Xin chào trọng tài '+t.ref.name); unlock(); } else { msg.textContent=`Email ${em} không phải email trọng tài của giải này.`; await au.signOut(); } }
+      catch(e){ msg.textContent=refErr(e); } };
+  };
+  if(hasEm) refCurEmail().then(em=>{ if(refEmailOk(t,em)) unlock(); else show(); }); else show(); }
 function refLog(t,txt){ if(!t.ref) return; t.rlog=t.rlog||[]; t.rlog.push({at:Date.now(),txt}); }
-function refSettings(t,v){ const r=t.ref||{name:'Chú Cường',pin:'',play:false};
-  const m=modal(`<h3>🧑‍⚖️ Quyền trọng tài</h3><p class="small muted">Bật lên thì chỉ người có mã PIN mới được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải. Tắt đi thì ai dùng máy cũng nhập được như cũ.</p>
+function refSettings(t,v){ const r=t.ref||{name:'Chú Cường',pin:'',emails:DB.refEmails||[],play:false};
+  const m=modal(`<h3>🧑‍⚖️ Quyền trọng tài</h3><p class="small muted">Bật lên thì chỉ trọng tài (đăng nhập Google đúng email, hoặc có PIN) mới được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải. Tắt đi thì ai dùng máy cũng nhập được như cũ.</p>
    <label class="f">Tên trọng tài</label><input type="text" id="rn" maxlength="30" value="${esc(r.name)}">
-   <label class="f">Mã PIN (4–6 chữ số)</label><input type="text" id="rp" inputmode="numeric" maxlength="6" value="${esc(r.pin)}">
+   <label class="f">Email trọng tài – đăng nhập Google (nhiều email cách nhau dấu phẩy)</label><input type="email" id="re" value="${esc((r.emails||[]).join(', '))}" placeholder="ví dụ: email-cua-chu@gmail.com">
+   <label class="f">Mã PIN dự phòng (4–6 chữ số, có thể để trống)</label><input type="text" id="rp" inputmode="numeric" maxlength="6" value="${esc(r.pin||'')}">
+   <p class="small muted" style="margin:4px 0 0">Cần ít nhất email hoặc PIN. Email chỉ lưu trên máy này, không hiện cho các bạn xem.</p>
+   <div class="small" id="rwho" style="margin-top:6px"></div>
    <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="rpl" ${r.play?'checked':''}> Trận ▶ Đấu cũng phải do trọng tài bấm bắt đầu</label>
    ${(t.rlog||[]).length?`<h3 style="margin:14px 0 6px">📒 Nhật ký trọng tài</h3><div class="small" style="max-height:180px;overflow:auto">${t.rlog.slice().reverse().map(x=>`<div class="mrow"><span class="muted">${new Date(x.at).toLocaleString('vi-VN')}</span><span>${esc(x.txt)}</span></div>`).join('')}</div>`:''}
    <div class="row" style="justify-content:space-between;margin-top:14px">${t.ref?'<button class="btn ghost" data-off>Tắt trọng tài</button>':'<span></span>'}<div class="row"><button class="btn ghost" data-x>Đóng</button><button class="btn pri" data-y>Lưu</button></div></div>`);
   $('[data-x]',m).onclick=()=>m.remove();
   const off=$('[data-off]',m); if(off) off.onclick=()=>{ refLog(t,'Tắt quyền trọng tài'); delete t.ref; TV.ref=null; save(); m.remove(); viewTour(v); };
-  $('[data-y]',m).onclick=()=>{ const n=$('#rn',m).value.trim()||'Trọng tài', p=$('#rp',m).value.trim(); if(!/^\d{4,6}$/.test(p)){ toast('Mã PIN cần 4–6 chữ số'); return; }
-    const was=!!t.ref; t.ref={name:n,pin:p,play:$('#rpl',m).checked}; refLog(t,was?'Đổi cài đặt trọng tài':'Bật quyền trọng tài: '+n); TV.ref=t.id; save(); m.remove(); viewTour(v); }; }
+  refCurEmail().then(em=>{ const w=$('#rwho',m); if(w&&em) w.innerHTML=`Đang đăng nhập trọng tài: <b>${esc(em)}</b> <button class="btn sm ghost" data-so>Đăng xuất</button>`; const so=$('[data-so]',m); if(so) so.onclick=async()=>{ (await refAuth()).signOut(); TV.ref=null; w.textContent='Đã đăng xuất trọng tài'; }; });
+  $('[data-y]',m).onclick=()=>{ const n=$('#rn',m).value.trim()||'Trọng tài', p=$('#rp',m).value.trim(), ems=parseEmails($('#re',m).value);
+    if(ems===null){ toast('Email chưa đúng định dạng'); return; } if(p&&!/^\d{4,6}$/.test(p)){ toast('Mã PIN cần 4–6 chữ số'); return; } if(!p&&!ems.length){ toast('Cần email trọng tài hoặc mã PIN'); return; }
+    if(ems.length) DB.refEmails=ems;
+    const was=!!t.ref; t.ref={name:n,pin:p,emails:ems,play:$('#rpl',m).checked}; refLog(t,was?'Đổi cài đặt trọng tài':'Bật quyền trọng tài: '+n); TV.ref=t.id; save(); m.remove(); viewTour(v); }; }
+
+function parseEmails(s){ const a=String(s||'').split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).filter(Boolean); if(a.some(x=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) return null; return [...new Set(a)]; }
