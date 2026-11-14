@@ -1441,7 +1441,7 @@ function viewTour(v){
     ${s.map((r,k)=>`<tr class="${k<(t.one?2:2)?'q1':''}"><td>${k+1}</td><td class="l">${pName(t,r.i)}${r.tb?' <span class="small muted" title="Xếp theo đối đầu / điểm ghi / bốc thăm">*</span>':''}</td><td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.F}</td><td>${r.A}</td><td>${r.F-r.A>0?'+':''}${r.F-r.A}</td><td><b>${r.pts}</b></td></tr>`).join('')}</table></div>
     <p class="small muted" style="margin:6px 0 0">Tô xanh: vào vòng sau. * bằng điểm và hiệu số, xếp theo đối đầu → điểm ghi → bốc thăm.</p></div>`; };
   v.innerHTML=`<div class="card"><div class="row between"><div><h2 style="margin:0">🏆 ${esc(t.name)}</h2><div class="small muted">${t.mode==='doi'?`👥 Giải Đôi · ${t.players.length} đội (${t.players.length*2} bạn)`:t.players.length+' người'} · ${t.one?'1 bảng':'2 bảng'} · mỗi trận đấu đến ${t.target} điểm · ${days.length} ngày thi đấu</div>${(t.prizes&&(t.prizes[1]||t.prizes[2]||t.prizes[3]))?`<div class="small" style="margin-top:4px">🎁 ${[1,2,3].filter(r=>t.prizes[r]).map(r=>PLACE[r].ic+' '+esc(t.prizes[r])).join(' · ')}</div>`:''}</div>
-    <div class="row"><button class="btn sm ghost" id="tback">← Các giải</button><button class="btn sm" id="tcopy">📋 Sao chép bảng</button><button class="btn sm" id="texp">💾 Sao lưu</button></div></div>
+    <div class="row"><button class="btn sm ghost" id="tback">← Các giải</button><button class="btn sm" id="tcopy">📋 Sao chép bảng</button><button class="btn sm" id="texp">💾 Sao lưu</button><button class="btn sm ${t.ref?'':'ghost'}" id="tref">🧑‍⚖️ ${t.ref?(TV.ref===t.id?'🔓 ':'🔒 ')+esc(t.ref.name):'Trọng tài'}</button></div></div>
     <div class="row" style="margin-top:10px">${[['sched','📅 Lịch theo ngày'],['table','📊 Bảng xếp hạng'],['rules','📜 Điều lệ']].map(([k,n])=>`<span class="tog ${TV.view===k?'on':''}" data-v="${k}">${n}</span>`).join('')}</div></div>
    ${champ}
    ${TV.view==='table'?(table('A')+(t.one?'':table('B'))):TV.view==='rules'?tourRules(t):
@@ -1449,17 +1449,19 @@ function viewTour(v){
       return `<div class="daycard card"><div class="row between"><b>Ngày ${d}</b><span class="small muted">${st}</span></div>${ms.map(m=>{
         if(m.bye) return `<div class="mrow small muted"><span>${t.one?'':'Bảng '+m.g+' · '}${pName(t,m.p1)} nghỉ</span></div>`;
         const done=m.s1!=null; return `<div class="mrow"><span class="small muted" style="min-width:90px">${m.st==='G'?(t.one?'Vòng bảng':'Bảng '+m.g):STN[m.st]}</span><span style="flex:1;text-align:right">${pName(t,m.p1)}</span>
-          <span class="res">${done?`${m.s1} – ${m.s2}`:'vs'}</span><span style="flex:1">${pName(t,m.p2)}</span>
+          <span class="res">${done?`${m.s1} – ${m.s2}`:'vs'}${m.wo?`<div class="small muted" style="font-weight:400">xử thua: ${esc(t.players[m.wo===1?m.p1:m.p2].name)} vắng</div>`:''}</span><span style="flex:1">${pName(t,m.p2)}</span>
           <span class="row">${done?`<button class="btn sm ghost" data-ed="${m.id}">✏️</button>`:`<button class="btn sm pri" data-play="${m.id}">▶ Đấu</button><button class="btn sm ghost" data-ed="${m.id}">✍ Nhập</button>`}</span></div>`; }).join('')}</div>`; }).join('')}`;
-  $('#tback').onclick=()=>{ TV.id=null; viewTour(v); };
+  $('#tback').onclick=()=>{ TV.id=null; TV.ref=null; viewTour(v); };
   $$('[data-v]',v).forEach(b=>b.onclick=()=>{ TV.view=b.dataset.v; viewTour(v); });
   $('#tcopy').onclick=()=>copyText(tourText(t),'Đã sao chép bảng xếp hạng, dán vào Zalo được ngay');
   $('#texp').onclick=()=>copyText(JSON.stringify({khtn7:'tour',v:1,tour:t}),'Đã sao chép dữ liệu giải. Dán vào Notepad để lưu.');
-  $$('[data-ed]',v).forEach(b=>b.onclick=()=>editResult(t,t.matches.find(m=>m.id===+b.dataset.ed),v));
-  $$('[data-play]',v).forEach(b=>b.onclick=()=>playTourMatch(t,t.matches.find(m=>m.id===+b.dataset.play),v));
+  $$('[data-ed]',v).forEach(b=>b.onclick=()=>refGate(t,()=>editResult(t,t.matches.find(m=>m.id===+b.dataset.ed),v)));
+  $$('[data-play]',v).forEach(b=>b.onclick=()=>{ const go=()=>playTourMatch(t,t.matches.find(m=>m.id===+b.dataset.play),v); (t.ref&&t.ref.play)?refGate(t,go):go(); });
+  $('#tref').onclick=()=>t.ref?refGate(t,()=>refSettings(t,v)):refSettings(t,v);
   if(R) bindAwards(v,t,R);
 }
 function tourRules(t){ const pz=t.prizes||{}; return `<div class="card"><h3>Điều lệ</h3><ul>
+  ${t.ref?`<li>Trọng tài: <b>${esc(t.ref.name)}</b>. Chỉ trọng tài (có mã PIN) được nhập, sửa, xoá kết quả, xử thua vắng mặt và xoá giải${t.ref.play?'; trận ▶ Đấu cũng phải do trọng tài bấm bắt đầu':''}. Mọi thao tác của trọng tài được ghi vào nhật ký.</li>`:''}
   ${reqText(t)?`<li>Điều kiện tham gia: ${reqText(t)}.</li>`:''}
   ${(pz[1]||pz[2]||pz[3])?`<li>Giải thưởng: ${[1,2,3].filter(r=>pz[r]).map(r=>`${PLACE[r].ic} ${PLACE[r].s}: ${esc(pz[r])}`).join('; ')}.</li>`:''}
   <li>Danh hiệu phụ: ⚡ Vua tốc độ (trả lời đúng nhanh nhất, tính các trận đấu bằng ▶ Đấu), 🎯 Tay ghi điểm (ghi nhiều điểm nhất), 🛡️ Bất bại (không thua trận nào). Vô địch, á quân, hạng Ba và danh hiệu được giấy khen và huy chương lưu vào hồ sơ.</li>
@@ -1477,12 +1479,17 @@ function editResult(t,m,v){
   const ko=m.st!=='G';
   const md=modal(`<h3>Nhập kết quả</h3><p class="small muted">${STN[m.st]} · Ngày ${m.day}${ko?' · vòng loại trực tiếp không được hoà':''}</p>
    <div class="grid g2"><div><label class="f">${pName(t,m.p1)}</label><input type="number" id="r1" min="0" value="${m.s1??''}"></div><div><label class="f">${pName(t,m.p2)}</label><input type="number" id="r2" min="0" value="${m.s2??''}"></div></div>
+   ${t.ref?`<div class="row" style="margin-top:10px"><span class="small muted">Xử thua vì vắng mặt:</span><button class="btn sm ghost" data-wo="1">${esc(t.players[m.p1].name)} vắng</button><button class="btn sm ghost" data-wo="2">${esc(t.players[m.p2].name)} vắng</button></div>`:''}
    <div class="row" style="justify-content:space-between;margin-top:14px">${m.s1!=null?'<button class="btn ghost" data-clr>Xoá kết quả</button>':'<span></span>'}<div class="row"><button class="btn ghost" data-x>Huỷ</button><button class="btn pri" data-y>Lưu</button></div></div>`);
   $('[data-x]',md).onclick=()=>md.remove();
-  const clr=$('[data-clr]',md); if(clr) clr.onclick=()=>{ if(laterKO(t,m)){ toast('Đã có vòng sau, không xoá được'); return; } m.s1=m.s2=null; save(); md.remove(); viewTour(v); };
+  const lab=`${STN[m.st]} ngày ${m.day}: ${t.players[m.p1].name} – ${t.players[m.p2].name}`;
+  const clr=$('[data-clr]',md); if(clr) clr.onclick=()=>{ if(laterKO(t,m)){ toast('Đã có vòng sau, không xoá được'); return; } refLog(t,`Xoá kết quả ${lab}`); m.s1=m.s2=null; delete m.wo; save(); md.remove(); viewTour(v); };
+  $$('[data-wo]',md).forEach(b=>b.onclick=()=>{ const w=+b.dataset.wo; if(m.s1!=null&&laterKO(t,m)){ toast('Đã có vòng sau, xoá vòng sau trước'); return; }
+    m.s1=w===1?0:t.target; m.s2=w===1?t.target:0; m.wo=w; delete m.sp; refLog(t,`Xử thua ${t.players[w===1?m.p1:m.p2].name} vắng mặt – ${lab} (${m.s1}–${m.s2})`); save(); md.remove(); viewTour(v); });
   $('[data-y]',md).onclick=()=>{ const a=parseInt($('#r1',md).value), b=parseInt($('#r2',md).value); if(isNaN(a)||isNaN(b)||a<0||b<0){ toast('Nhập tỉ số hợp lệ'); return; } if(ko&&a===b){ toast('Vòng loại trực tiếp phải có người thắng'); return; }
     if(m.s1!=null&&laterKO(t,m)&&((m.s1>m.s2)!==(a>b))){ toast('Đổi người thắng sẽ làm sai vòng sau. Xoá vòng sau trước.'); return; }
-    m.s1=a; m.s2=b; save(); md.remove(); viewTour(v); };
+    if(t.ref) refLog(t,`${m.s1!=null?'Sửa':'Nhập'} kết quả ${lab}: ${a}–${b}${m.s1!=null?` (trước đó ${m.s1}–${m.s2})`:''}`);
+    m.s1=a; m.s2=b; delete m.wo; save(); md.remove(); viewTour(v); };
 }
 function laterKO(t,m){ const order={G:0,SF:1,F:2,'3P':2}; return t.matches.some(x=>order[x.st]>order[m.st]); }
 function playTourMatch(t,m,v){
@@ -1515,6 +1522,10 @@ function tourList(v){
     <div class="row"><label class="small">ELO tối thiểu <input type="number" id="treq" min="0" step="50" value="0" style="width:90px"></label>
      <label class="small">Số câu luyện tập đúng tối thiểu <input type="number" id="treqok" min="0" step="5" value="0" style="width:90px"></label></div>
     <p class="small muted" style="margin:6px 0 0">Để 0 là không giới hạn. ELO tăng khi luyện tập (📚 Luyện tập, 📝 Thi thử, 🧮 Bài tính): làm đúng câu khó được cộng nhiều hơn, sai thì bị trừ. Số câu đúng chỉ tính câu luyện tập thuộc các chương đã chọn ở bộ lọc trên (không chọn chương = mọi chương). Bạn chưa đủ điều kiện sẽ hiện ❌ và không vào giải được.</p></div>
+   <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🧑‍⚖️ Trọng tài <span class="small muted">(tùy chọn)</span></h3>
+    <label class="small"><input type="checkbox" id="trefon"> Bật quyền trọng tài</label>
+    <div class="row" id="trefw" style="display:none;margin-top:6px"><label class="small">Tên <input type="text" id="trefn" maxlength="30" value="Chú Cường" style="width:150px"></label><label class="small">Mã PIN <input type="text" id="trefp" inputmode="numeric" maxlength="6" placeholder="4–6 số" style="width:90px"></label><label class="small"><input type="checkbox" id="trefpl"> Trọng tài bấm bắt đầu trận ▶ Đấu</label></div>
+    <p class="small muted" style="margin:6px 0 0">Bật lên thì chỉ trọng tài (có PIN) được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải; mọi thao tác được ghi nhật ký. Bật/tắt lại được bất cứ lúc nào bằng nút 🧑‍⚖️ trong trang giải.</p></div>
    <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🎁 Giải thưởng</h3>
     <div class="grid g3">${[1,2,3].map(r=>`<label class="small">${PLACE[r].ic} ${PLACE[r].s}<input type="text" id="tpz${r}" maxlength="60" placeholder="${['','Ví dụ: 100.000đ + sách','Ví dụ: 50.000đ','Ví dụ: bộ bút'][r]}"></label>`).join('')}</div>
     <label class="small" style="display:block;margin-top:8px">Người ký giấy khen <input type="text" id="tsig" maxlength="30" value="Chú Cường" style="width:200px"></label>
@@ -1525,19 +1536,21 @@ function tourList(v){
   const chsNow=()=>NT.f.chs&&NT.f.chs.length?NT.f.chs:null;
   const showElig=()=>{ const r=reqNow(); DB.profiles.forEach(p=>{ const e=$(`[data-elig="${p.id}"]`,v); if(!e) return; const el=eligible(p,r,chsNow());
     e.textContent=(r.elo||r.ok)?(el.ok?'✅':'❌ '+el.why.join(', ')):`ELO ${p.elo}`; }); };
+  $('#trefon').onchange=()=>{ $('#trefw').style.display=$('#trefon').checked?'':'none'; };
   $('#tmode').onchange=()=>{ const d=$('#tmode').value==='doi'; $('#tpairw').style.display=d?'':'none'; $('#tmodehint').style.display=d?'':'none'; };
   bindFilter('tf',NT.f,showElig); $('#treq').oninput=showElig; $('#treqok').oninput=showElig; showElig();
   $$('[data-open]',v).forEach(b=>b.onclick=()=>{ TV.id=b.dataset.open; TV.view='sched'; viewTour(v); });
-  $$('[data-del]',v).forEach(b=>b.onclick=()=>confirmBox('Xoá giải này?',()=>{ DB.tours=DB.tours.filter(t=>t.id!==b.dataset.del); save(); viewTour(v); }));
+  $$('[data-del]',v).forEach(b=>b.onclick=()=>{ const tt=DB.tours.find(x=>x.id===b.dataset.del); refGate(tt,()=>confirmBox('Xoá giải này?',()=>{ DB.tours=DB.tours.filter(t=>t.id!==b.dataset.del); save(); viewTour(v); })); });
   $('#tmk').onclick=()=>{ const ps=[...sel].map(id=>{ const p=DB.profiles.find(x=>x.id===id); return {name:p.name,emo:p.emo,elo:p.elo,pid:p.id}; });
     $('#tnames').value.split('\n').map(s=>s.trim()).filter(Boolean).forEach(n=>{ if(ps.some(p=>p.name.toLowerCase()===n.toLowerCase())) return; const pr=DB.profiles.find(x=>x.name.toLowerCase()===n.toLowerCase()); ps.push(pr?{name:pr.name,emo:pr.emo,elo:pr.elo,pid:pr.id}:{name:n.slice(0,16),emo:pick(EMOS),elo:1000}); });
     const rq=reqNow(); if(rq.elo||rq.ok){ const bad=ps.map(x=>({x,e:eligible(x.pid?DB.profiles.find(p=>p.id===x.pid):DB.profiles.find(p=>p.name.toLowerCase()===x.name.toLowerCase()),rq,chsNow())})).filter(o=>!o.e.ok);
       if(bad.length){ modal(`<h3>❌ Chưa đủ điều kiện tham gia</h3><p class="small muted">Yêu cầu: ${rq.elo?'ELO ≥ '+rq.elo:''}${rq.elo&&rq.ok?' và ':''}${rq.ok?'luyện đúng ≥ '+rq.ok+' câu':''}</p>${bad.map(o=>`<div class="mrow"><b>${esc(o.x.emo||'')} ${esc(o.x.name)}</b><span class="small">${o.e.why.join(', ')}</span></div>`).join('')}<p class="small">Các bạn này cần vào <b>📚 Luyện tập</b> thêm rồi mới đăng ký được. Bỏ chọn các bạn này, hoặc hạ điều kiện.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" data-x>Đã hiểu</button></div>`).querySelector('[data-x]').onclick=e=>e.target.closest('.modal').remove(); return; } }
+    let ref=null; if($('#trefon').checked){ const pn=$('#trefp').value.trim(); if(!/^\d{4,6}$/.test(pn)){ toast('Mã PIN trọng tài cần 4–6 chữ số'); return; } ref={name:$('#trefn').value.trim()||'Trọng tài',pin:pn,play:$('#trefpl').checked}; }
     const doi=$('#tmode').value==='doi'; let entries=ps;
     if(doi){ if(ps.length%2){ toast('Giải Đôi cần số bạn chẵn – đang có '+ps.length+' bạn'); return; } if(ps.length<6){ toast('Giải Đôi cần ít nhất 6 bạn (3 đội)'); return; } if(ps.length>24){ toast('Tối đa 24 bạn (12 đội)'); return; }
       entries=makeTeams(ps,$('#tpair').value); }
     else { if(ps.length<3){ toast('Cần ít nhất 3 người chơi'); return; } if(ps.length>12){ toast('Tối đa 12 người'); return; } }
-    const t=createTour($('#tn').value.trim(),entries,$('#tsp').value,+$('#ttg').value,NT.f,{req:rq,prizes:{1:$('#tpz1').value.trim(),2:$('#tpz2').value.trim(),3:$('#tpz3').value.trim()},signer:$('#tsig').value.trim()||'Chú Cường',mode:doi?'doi':'don'}); TV.id=t.id; TV.view='sched'; viewTour(v); };
+    const t=createTour($('#tn').value.trim(),entries,$('#tsp').value,+$('#ttg').value,NT.f,{req:rq,prizes:{1:$('#tpz1').value.trim(),2:$('#tpz2').value.trim(),3:$('#tpz3').value.trim()},signer:$('#tsig').value.trim()||'Chú Cường',mode:doi?'doi':'don',ref,rlog:ref?[{at:Date.now(),txt:'Bật quyền trọng tài: '+ref.name}]:[]}); TV.id=t.id; TV.ref=ref?t.id:null; TV.view='sched'; viewTour(v); };
   const imp=txt=>{ try{ const o=JSON.parse(txt); const t=o.tour||o; if(!t.matches||!t.players) throw 0; t.id=uid(); DB.tours.push(t); save(); TV.id=t.id; viewTour(v); toast('Đã mở giải'); }catch(e){ toast('Dữ liệu giải không đúng'); } };
   $('#tfile').onchange=e=>{ const f=e.target.files[0]; if(f) f.text().then(imp); };
   $('#tpaste').onclick=()=>{ const m=modal(`<h3>Dán dữ liệu giải</h3><textarea id="ti" style="min-height:150px"></textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn ghost" data-x>Huỷ</button><button class="btn pri" data-y>Mở</button></div>`); $('[data-x]',m).onclick=()=>m.remove(); $('[data-y]',m).onclick=()=>{ const x=$('#ti',m).value; m.remove(); imp(x); }; };
@@ -1548,6 +1561,24 @@ function makeTeams(ps,how){ let a=[...ps], pairs=[];
   if(how==='bal'){ a.sort((x,y)=>(y.elo||1000)-(x.elo||1000)); for(let i=0;i<a.length/2;i++) pairs.push([a[i],a[a.length-1-i]]); }
   else { if(how==='rand') a=shuffle(a); for(let i=0;i<a.length;i+=2) pairs.push([a[i],a[i+1]]); }
   return pairs.map(([x,y])=>({name:`${x.name} & ${y.name}`,emo:(x.emo||'🙂')+(y.emo||'🙂'),elo:Math.round(((x.elo||1000)+(y.elo||1000))/2),members:[x,y]})); }
+
+// ---- Quyền trọng tài (tùy chọn): PIN khoá nhập/sửa kết quả, xử thua vắng mặt, nhật ký
+function refGate(t,ok){ if(!t||!t.ref||TV.ref===t.id) return ok();
+  const m=modal(`<h3>🧑‍⚖️ Trọng tài ${esc(t.ref.name)}</h3><p class="small muted">Nhập mã PIN trọng tài để tiếp tục. Mở khoá một lần, dùng đến khi rời trang giải.</p><input type="password" id="rq" inputmode="numeric" maxlength="6"><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost" data-x>Huỷ</button><button class="btn pri" data-y>Mở khoá</button></div>`);
+  const go=()=>{ if($('#rq',m).value===t.ref.pin){ TV.ref=t.id; m.remove(); ok(); const b=$('#tref'); if(b) b.innerHTML='🧑‍⚖️ 🔓 '+esc(t.ref.name); } else { toast('Sai mã PIN trọng tài'); $('#rq',m).value=''; } };
+  $('[data-x]',m).onclick=()=>m.remove(); $('[data-y]',m).onclick=go; $('#rq',m).onkeydown=e=>{ if(e.key==='Enter') go(); }; setTimeout(()=>$('#rq',m).focus(),50); }
+function refLog(t,txt){ if(!t.ref) return; t.rlog=t.rlog||[]; t.rlog.push({at:Date.now(),txt}); }
+function refSettings(t,v){ const r=t.ref||{name:'Chú Cường',pin:'',play:false};
+  const m=modal(`<h3>🧑‍⚖️ Quyền trọng tài</h3><p class="small muted">Bật lên thì chỉ người có mã PIN mới được nhập/sửa/xoá kết quả, xử thua vắng mặt và xoá giải. Tắt đi thì ai dùng máy cũng nhập được như cũ.</p>
+   <label class="f">Tên trọng tài</label><input type="text" id="rn" maxlength="30" value="${esc(r.name)}">
+   <label class="f">Mã PIN (4–6 chữ số)</label><input type="text" id="rp" inputmode="numeric" maxlength="6" value="${esc(r.pin)}">
+   <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="rpl" ${r.play?'checked':''}> Trận ▶ Đấu cũng phải do trọng tài bấm bắt đầu</label>
+   ${(t.rlog||[]).length?`<h3 style="margin:14px 0 6px">📒 Nhật ký trọng tài</h3><div class="small" style="max-height:180px;overflow:auto">${t.rlog.slice().reverse().map(x=>`<div class="mrow"><span class="muted">${new Date(x.at).toLocaleString('vi-VN')}</span><span>${esc(x.txt)}</span></div>`).join('')}</div>`:''}
+   <div class="row" style="justify-content:space-between;margin-top:14px">${t.ref?'<button class="btn ghost" data-off>Tắt trọng tài</button>':'<span></span>'}<div class="row"><button class="btn ghost" data-x>Đóng</button><button class="btn pri" data-y>Lưu</button></div></div>`);
+  $('[data-x]',m).onclick=()=>m.remove();
+  const off=$('[data-off]',m); if(off) off.onclick=()=>{ refLog(t,'Tắt quyền trọng tài'); delete t.ref; TV.ref=null; save(); m.remove(); viewTour(v); };
+  $('[data-y]',m).onclick=()=>{ const n=$('#rn',m).value.trim()||'Trọng tài', p=$('#rp',m).value.trim(); if(!/^\d{4,6}$/.test(p)){ toast('Mã PIN cần 4–6 chữ số'); return; }
+    const was=!!t.ref; t.ref={name:n,pin:p,play:$('#rpl',m).checked}; refLog(t,was?'Đổi cài đặt trọng tài':'Bật quyền trọng tài: '+n); TV.ref=t.id; save(); m.remove(); viewTour(v); }; }
 
 // ===================== GIẢI THƯỞNG · HUY CHƯƠNG · BẢNG VÀNG · ĐIỀU KIỆN THAM GIA =====================
 DB.hall=DB.hall||[];
