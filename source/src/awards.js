@@ -31,6 +31,8 @@ function tourResults(t){
   if(sp.length) titles.push({k:'speed',i:sp[0].i,v:(sp[0].a/1000).toFixed(1).replace('.',',')+' giây/câu'});
   return {places,titles,date:F.at||Date.now()};
 }
+function teamProfs(t,i){ const e=t.players[i]; if(t.mode==='doi'&&e&&e.members) return e.members.map(mb=>(mb.pid&&DB.profiles.find(x=>x.id===mb.pid))||DB.profiles.find(x=>x.name.toLowerCase()===String(mb.name).toLowerCase())||null); return [tourProf(t,i)]; }
+function certBtns(t,i,key){ const e=t.players[i]; if(t.mode==='doi'&&e&&e.members) return e.members.map((mb,j)=>`<button class="btn sm" style="margin:6px 4px 0 0" data-cert="${key}:${j}">🎖 ${esc(mb.name)}</button>`).join(''); return `<button class="btn sm" style="margin-top:6px" data-cert="${key}">🎖 Giấy khen</button>`; }
 function tourProf(t,i){ const p=t.players[i]; if(!p) return null; return (p.pid&&DB.profiles.find(x=>x.id===p.pid))||DB.profiles.find(x=>x.name.toLowerCase()===String(p.name).toLowerCase())||null; }
 // ghi huy chương vào hồ sơ + bảng vàng (chạy lại được, sửa kết quả thì tự cập nhật)
 function syncAwards(t){
@@ -38,7 +40,7 @@ function syncAwards(t){
   DB.profiles.forEach(p=>{ if(p.medals) p.medals=p.medals.filter(m=>m.tid!==t.id); });
   DB.hall=DB.hall.filter(h=>h.tid!==t.id);
   if(R){ const d=Date.now();
-    const give=(i,o)=>{ const p=tourProf(t,i); if(p){ p.medals=p.medals||[]; p.medals.push(Object.assign({tid:t.id,tn:t.name,d},o)); } };
+    const give=(i,o)=>{ teamProfs(t,i).forEach(p=>{ if(p){ p.medals=p.medals||[]; p.medals.push(Object.assign({tid:t.id,tn:t.name,d},o)); } }); };
     R.places.forEach(x=>give(x.i,{r:x.r})); R.titles.forEach(x=>give(x.i,{k:x.k}));
     const nm=i=>{ const p=t.players[i]; return {n:p.name,e:p.emo||'🙂'}; };
     DB.hall.push({tid:t.id,tn:t.name,d:t.created,places:R.places.map(x=>Object.assign({r:x.r},nm(x.i))),titles:R.titles.map(x=>Object.assign({k:x.k,v:x.v},nm(x.i)))}); }
@@ -50,16 +52,16 @@ function awardsHTML(t,R){
   const pz=t.prizes||{};
   return `<div class="champ" style="margin-bottom:14px"><div class="big">🏆 ${pName(t,R.places[0].i)}</div><p>Vô địch ${esc(t.name)}</p>
    <div class="grid g3" style="margin-top:10px;text-align:left">${R.places.map(x=>`<div class="tile"><b>${PLACE[x.r].ic} ${PLACE[x.r].n}</b><div>${pName(t,x.i)}</div>${pz[x.r]?`<div class="small">🎁 ${esc(pz[x.r])}</div>`:''}
-     <button class="btn sm" style="margin-top:6px" data-cert="p${x.r}">🎖 Giấy khen</button></div>`).join('')}</div>
+     ${certBtns(t,x.i,'p'+x.r)}</div>`).join('')}</div>
    ${R.titles.length?`<h3 style="margin:14px 0 6px">Danh hiệu</h3><div class="grid g3" style="text-align:left">${R.titles.map((x,j)=>`<div class="tile"><b>${TITLES[x.k].ic} ${TITLES[x.k].n}</b><div>${pName(t,x.i)}</div><div class="small muted">${TITLES[x.k].d} · ${esc(x.v)}</div>
-     <button class="btn sm" style="margin-top:6px" data-cert="t${j}">🎖 Giấy khen</button></div>`).join('')}</div>`:''}
+     ${certBtns(t,x.i,'t'+j)}</div>`).join('')}</div>`:''}
    ${!R.titles.some(x=>x.k==='speed')?'<p class="small muted" style="margin:8px 0 0">⚡ Vua tốc độ chỉ tính khi các trận được đấu bằng nút ▶ Đấu (app đo thời gian trả lời).</p>':''}</div>`; }
-function bindAwards(v,t,R){ $$('[data-cert]',v).forEach(b=>b.onclick=()=>{ const k=b.dataset.cert;
-  if(k[0]==='p'){ const x=R.places.find(y=>y.r===+k.slice(1)); certificate(t,x.i,`${PLACE[x.r].ic} ${PLACE[x.r].s.toUpperCase()} – ${PLACE[x.r].n.toUpperCase()}`,(t.prizes||{})[x.r]); }
-  else { const x=R.titles[+k.slice(1)]; certificate(t,x.i,`${TITLES[x.k].ic} DANH HIỆU “${TITLES[x.k].n.toUpperCase()}”`,TITLES[x.k].d+' ('+x.v+')'); } }); }
+function bindAwards(v,t,R){ $$('[data-cert]',v).forEach(b=>b.onclick=()=>{ const [k,mi]=b.dataset.cert.split(':'); const m=mi==null?null:+mi;
+  if(k[0]==='p'){ const x=R.places.find(y=>y.r===+k.slice(1)); certificate(t,x.i,`${PLACE[x.r].ic} ${PLACE[x.r].s.toUpperCase()} – ${PLACE[x.r].n.toUpperCase()}`,(t.prizes||{})[x.r],m); }
+  else { const x=R.titles[+k.slice(1)]; certificate(t,x.i,`${TITLES[x.k].ic} DANH HIỆU “${TITLES[x.k].n.toUpperCase()}”`,TITLES[x.k].d+' ('+x.v+')',m); } }); }
 
 // ---- giấy khen (ảnh PNG, in A4 ngang)
-function certificate(t,i,title,sub){
+function certificate(t,i,title,sub,mi){
   const W=1754,H=1240,c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
   const grd=g.createLinearGradient(0,0,W,H); grd.addColorStop(0,'#fffdf5'); grd.addColorStop(1,'#f3faf5'); g.fillStyle=grd; g.fillRect(0,0,W,H);
   g.strokeStyle='#0f8a5f'; g.lineWidth=16; g.strokeRect(40,40,W-80,H-80); g.strokeStyle='#d4a72c'; g.lineWidth=5; g.strokeRect(74,74,W-148,H-148);
@@ -69,10 +71,11 @@ function certificate(t,i,title,sub){
   T('KHTN·7 ĐẤU TRƯỜNG',175,'700 34px "Segoe UI",system-ui,sans-serif','#0f8a5f');
   fit('GIẤY KHEN',360,130,'800','#b8860b');
   T('Ban tổ chức trân trọng khen tặng',440,'400 40px "Segoe UI",system-ui,sans-serif','#3d5a50');
-  const p=t.players[i]; fit(`${p.emo||''} ${p.name}`,565,110,'800','#0f5f43');
+  const team=t.players[i]; const p=(mi!=null&&team.members)?team.members[mi]:team; const mate=(mi!=null&&team.members)?team.members[1-mi]:null;
+  fit(`${p.emo||''} ${p.name}`,565,110,'800','#0f5f43');
   fit(title,675,58,'700','#17322a');
   if(sub) fit(sub,750,40,'400','#3d5a50');
-  fit(`tại ${t.name}`,830,44,'600','#17322a');
+  fit(mate?`cùng đồng đội ${mate.name} · tại ${t.name} (Giải Đôi)`:`tại ${t.name}`,830,44,'600','#17322a');
   const d=new Date(); g.font='400 34px "Segoe UI",system-ui,sans-serif'; g.fillStyle='#3d5a50'; g.textAlign='left'; g.fillText(`Ngày ${d.getDate()} tháng ${d.getMonth()+1} năm ${d.getFullYear()}`,200,1000);
   g.textAlign='center'; g.fillText('Người trao giải',W-420,960); g.font='italic 700 64px "Segoe Script","Brush Script MT",cursive'; g.fillStyle='#0f5f43'; g.fillText(t.signer||'Chú Cường',W-420,1060);
   g.font='120px serif'; g.textAlign='center'; g.fillText(/VÔ ĐỊCH/.test(title)?'🏆':/Á QUÂN/.test(title)?'🥈':/HẠNG BA/.test(title)?'🥉':'🏅',W/2,1080);
