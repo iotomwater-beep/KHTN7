@@ -4,6 +4,9 @@ const BOT_NAMES=['Bot Mầm','Bot Chồi','Bot Lá','Bot Hoa','Bot Quả','Bot C
 const BOT_EMO=['🌱','🌿','🍃','🌼','🍎','🌳','🌲','🏔️'];
 const KEYSETS=[['1','2','3','4'],['q','w','e','r'],['u','i','o','p'],['7','8','9','0']];
 const ARENA_TIME={1:15,2:25,3:40};
+const CALC_TIME={1:60,2:90,3:120}; // bài tính cần nhiều thời gian hơn
+function qTime(q,f){ return ((q&&q.calc?CALC_TIME:ARENA_TIME)[q&&q.lv]||20)*((f&&+f.tmul)||1); }
+function inMode(m){ return !!(m.cfg.filter&&m.cfg.filter.calcIn&&m.q&&m.q.calc); }
 function botSeat(l){ return {kind:'bot',lvl:l,name:BOT_NAMES[l-1],emo:BOT_EMO[l-1],elo:700+100*l}; }
 function eloExpected(a,b){ return 1/(1+Math.pow(10,(b-a)/400)); }
 
@@ -23,7 +26,7 @@ class Match{
     if(A>=t||B>=t||(asked>=this.cap&&!(this.cfg.noDraw&&A===B))) return this.finish();
     this.qi++; this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q;
     this.ans={}; this.winner=null; this.phase='q';
-    this.limit=(ARENA_TIME[this.q.lv]||20)*1000; this.deadline=Date.now()+this.limit;
+    this.limit=qTime(this.q,this.cfg.filter)*1000; this.typed={}; this.deadline=Date.now()+this.limit;
     this.sudden=asked>=this.cap;
     this.timers.push(setTimeout(()=>this.reveal(),this.limit));
     for(const s of this.seatIds()){ const st=this.seats[s]; if(st.kind!=='bot') continue;
@@ -33,6 +36,8 @@ class Match{
       if(t<this.limit-300) this.timers.push(setTimeout(()=>this.answer(s,c),t)); }
     this.upd();
   }
+  answerVal(seat,str){ if(this.phase!=='q'||!this.q.calc) return false; const r=calcCheck(this.q.calc,str); if(r===null) return false;
+    this.answer(seat,r?this.q.ans:(this.q.ans+1)%this.q.opts.length); if(this.ans[seat]) this.ans[seat].v=String(str); return true; }
   answer(seat,c){
     if(this.phase!=='q'||!this.seats[seat]||this.ans[seat]) return;
     const ok=c===this.q.ans; this.ans[seat]={c,ok,t:Date.now()};
@@ -65,7 +70,7 @@ class Match{
 // ----- Giao diện trận đấu dùng chung (chạy trên máy chủ trận)
 function seatLabel(st){ return `${st.emo||'🙂'} ${esc(st.name)}`; }
 function renderMatch(el,m,opts={}){
-  const ids=m.seatIds(); const q=m.q;
+  const ids=m.seatIds(); const q=m.q; const IM=inMode(m)&&m.phase!=='end';
   { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
     matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
@@ -81,19 +86,24 @@ function renderMatch(el,m,opts={}){
     const rev=m.phase==='rev';
     body=`${m.sudden?'<div class="tag l3" style="margin-bottom:6px">⚡ Câu hỏi phụ – ai đúng trước thắng</div>':''}<div class="timer"><i id="tbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${m.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · ${lvTag(q)}</div><div class="qbox">${esc(q.q)}</div>
-     <div class="opts">${q.opts.map((o,i)=>`<div class="opt ${rev&&i===q.ans?'ok':''}"><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>
-     ${rev?`<div class="ex">${m.winner?`✅ ${seatLabel(m.seats[m.winner])} trả lời đúng trước, +1 cho đội ${m.winner[0]}`:'Không ai trả lời đúng.'} Đáp án <b>${'ABCD'[q.ans]}</b>. ${esc(q.ex||'')}</div>`:''}
+     ${IM?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền số vào ô của mình, bấm Enter (gõ 2,5 hoặc 2.5 đều được).</div>`:`<div class="opts">${q.opts.map((o,i)=>`<div class="opt ${rev&&i===q.ans?'ok':''}"><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>`}
+     ${rev?`<div class="ex">${m.winner?`✅ ${seatLabel(m.seats[m.winner])} trả lời đúng trước, +1 cho đội ${m.winner[0]}`:'Không ai trả lời đúng.'} Đáp án <b>${IM?esc(q.opts[q.ans]):'ABCD'[q.ans]}</b>. ${IM?ids.filter(s=>m.ans[s]&&m.ans[s].v).map(s=>`<span class="chip">${esc(m.seats[s].name)}: ${esc(m.ans[s].v)} ${m.ans[s].ok?'✅':'❌'}</span>`).join(' '):''} ${esc(q.ex||'')}</div>`:''}
      ${humans.length?`<div class="pads">${humans.map(s=>{ const ks=m.seats[s].keys; const lk=m.ans[s]||rev;
+        if(IM) return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b></div><div class="row" style="flex-wrap:nowrap"><input type="text" inputmode="decimal" data-in="${s}" value="${esc(m.typed[s]||'')}" placeholder="Đáp số" ${lk?'disabled':''} style="flex:1;min-width:0;font-size:20px"><button class="btn pri" data-go="${s}" ${lk?'disabled':''}>Gửi</button></div>${m.ans[s]&&!rev?`<div class="small">${m.ans[s].ok?'✅':'❌ Sai rồi'}</div>`:''}</div>`;
         return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b> <span class="muted">· phím ${ks.join(' ').toUpperCase()}</span></div><div class="pb">${[0,1,2,3].map(i=>`<button data-s="${s}" data-c="${i}" ${lk?'disabled':''}>${'ABCD'[i]} <span class="small muted">(${ks[i].toUpperCase()})</span></button>`).join('')}</div></div>`; }).join('')}</div>`:''}`;
   }
   el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div></div>
     <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div></div></div>${body}
     ${m.phase!=='end'?`<div class="row" style="justify-content:flex-end;margin-top:12px">${opts.extra||''}<button class="btn ghost sm" id="mquit">Dừng trận</button></div>`:''}</div>`;
   $$('[data-s]',el).forEach(b=>b.onclick=()=>m.answer(b.dataset.s,+b.dataset.c));
+  if(IM){ const go=s=>{ const i=$(`[data-in="${s}"]`,el); const val=i?i.value:''; if(!m.answerVal(s,val)) toast('Nhập một con số nhé'); };
+    $$('[data-in]',el).forEach(i=>{ i.oninput=()=>{ m.typed[i.dataset.in]=i.value; }; i.onfocus=()=>{ m.focusIn=i.dataset.in; }; i.onkeydown=e=>{ if(e.key==='Enter') go(i.dataset.in); }; });
+    $$('[data-go]',el).forEach(b=>b.onclick=()=>go(b.dataset.go));
+    const f=m.focusIn&&$(`[data-in="${m.focusIn}"]`,el)||$('[data-in]:not([disabled])',el); if(f&&!f.disabled){ f.focus(); const L=f.value.length; try{ f.setSelectionRange(L,L); }catch(e){} } }
   const qb=$('#mquit',el); if(qb) qb.onclick=()=>confirmBox('Dừng trận đấu? Kết quả sẽ không được tính.',()=>{ m.stop(); opts.onQuit&&opts.onQuit(); });
 }
 function animTimer(m){ const raf=()=>{ const b=document.getElementById('tbar'); if(!b||m.phase==='end') return; const w=m.phase==='q'?Math.max(0,(m.deadline-Date.now())/m.limit*100):0; b.style.width=w+'%'; requestAnimationFrame(raf); }; requestAnimationFrame(raf); }
-function matchKeys(m){ const h=e=>{ if(m.phase!=='q'||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
+function matchKeys(m){ const h=e=>{ if(m.phase!=='q'||inMode(m)||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
     for(const s of m.seatIds()){ const st=m.seats[s]; if(st.kind!=='human') continue; const i=st.keys.indexOf(k); if(i>=0){ m.answer(s,i); return; } } };
   document.addEventListener('keydown',h); return ()=>document.removeEventListener('keydown',h); }
 
@@ -134,7 +144,7 @@ function viewArena(v){ musicStop();
     <span style="flex:1"></span><label class="small">Đấu đến <select id="atg">${[3,5,7,10,15].map(n=>`<option ${n===ARF.target?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
    <div class="grid g2" style="margin-top:8px"><div>${seatSel('A1')}${two?seatSel('A2'):''}</div><div>${seatSel('B1')}${two?seatSel('B2'):''}</div></div>
    <p class="small muted">Bộ phím theo thứ tự người thật: người 1 dùng <b>1 2 3 4</b>, người 2 <b>Q W E R</b>, người 3 <b>U I O P</b>, người 4 <b>7 8 9 0</b>. Bot cấp 1 rất dễ, cấp 8 gần như không sai. <button class="btn sm ghost" id="anp">＋ Thêm hồ sơ</button></p>
-   ${filterUI('af',ARF)}
+   ${filterUI('af',ARF)}${timeUI('at',ARF)}
    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn pri" id="ago">▶ Bắt đầu trận</button></div></div>
    <div class="card"><h3>Bảng xếp hạng ELO trên máy này</h3><table><tr><th>#</th><th class="l">Người chơi</th><th>ELO</th><th>T</th><th>H</th><th>B</th></tr>
    ${DB.profiles.filter(p=>!p.role||p.role==='hs').sort((a,b)=>b.elo-a.elo).map((p,i)=>`<tr><td>${i+1}</td><td class="l">${p.emo} ${esc(p.name)}</td><td><b>${p.elo}</b></td><td>${p.w}</td><td>${p.d}</td><td>${p.l}</td></tr>`).join('')}</table></div>`;
@@ -144,5 +154,5 @@ function viewArena(v){ musicStop();
   $('#anp').onclick=()=>profileDialog(()=>viewArena(v));
   bindFilter('af',ARF);
   $('#ago').onclick=()=>{ const vals=two?{A1:S.A1,A2:S.A2,B1:S.B1,B2:S.B2}:{A1:S.A1,B1:S.B1};
-    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs}}); };
+    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn}}); };
 }

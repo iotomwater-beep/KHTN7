@@ -262,3 +262,12 @@ function parseBulk(txt,base){
 }
 function copyText(t,msg){ const done=()=>toast(msg||'Đã sao chép'); try{ navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done)); }catch(e){ fallbackCopy(t,done); } }
 function fallbackCopy(t,done){ const m=modal(`<h3>Sao chép thủ công</h3><p class="small muted">Bấm vào ô, Ctrl+A rồi Ctrl+C.</p><textarea style="min-height:160px">${esc(t)}</textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-x>Đóng</button></div>`); $('textarea',m).select(); $('[data-x]',m).onclick=()=>m.remove(); }
+
+// ⏱ thời gian mỗi câu & cách trả lời bài tính (dùng cho Đấu trường, Online, Giải đấu)
+const TF={}; function timeUI(id,f){ f.tmul=f.tmul||1; TF[id]=f; return `<div class="row" id="${id}" style="margin-top:10px">
+  <label class="small">⏱ Thời gian mỗi câu <select data-tm>${[[1,'Bình thường'],[1.5,'Gấp rưỡi (×1,5)'],[2,'Gấp đôi (×2)'],[3,'Gấp ba (×3)']].map(([v,n])=>`<option value="${v}" ${+f.tmul===v?'selected':''}>${n}</option>`).join('')}</select></label>
+  <label class="small">🧮 Bài tính <select data-ci><option value="">Trắc nghiệm A B C D</option><option value="1" ${f.calcIn?'selected':''}>Tự điền đáp số</option></select></label>
+  <span class="small muted" style="flex-basis:100%">Bình thường: câu lý thuyết 15–40 giây, bài tính 60–120 giây tuỳ mức. "Tự điền đáp số" chỉ áp dụng cho bài tính.</span></div>`; }
+document.addEventListener('change',e=>{ const sel=e.target; const box=sel.closest&&sel.closest('[id]'); if(!box) return;
+  const f=TF[box.id]; if(!f||!['at','ht','tt'].includes(box.id)) return;
+  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; });

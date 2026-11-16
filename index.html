@@ -806,7 +806,7 @@ function calcToMCQ(c){ // đổi bài tính thành câu trắc nghiệm 4 lựa 
   const cand=[...(c.w||[]),c.a*2,c.a/2,c.a*10,c.a+1,c.a*1.5].filter(x=>isFinite(x)&&x>=0);
   for(const x of cand){ if(opts.length>=4) break; const s=calcFmt(c,x); if(!opts.includes(s)) opts.push(s); }
   let k=2; while(opts.length<4){ const s=calcFmt(c,c.a+k); if(!opts.includes(s)) opts.push(s); k++; }
-  return {id:'c',src:'calc',ch:c.tr,lv:c.lv,gr:c.g,q:c.q,opts,ex:c.steps.join(' ')};
+  return {id:'c',src:'calc',ch:c.tr,lv:c.lv,gr:c.g,q:c.q,opts,ex:c.steps.join(' '),calc:{a:c.a,d:c.d}};
 }
 function calcCheck(c,str){ // đọc số người dùng nhập: chấp nhận 2,5 · 2.5 · 12.000 · 1 200
   let s=String(str||'').trim().replace(/\s/g,''); if(!s) return null;
@@ -1080,6 +1080,15 @@ function parseBulk(txt,base){
 function copyText(t,msg){ const done=()=>toast(msg||'Đã sao chép'); try{ navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done)); }catch(e){ fallbackCopy(t,done); } }
 function fallbackCopy(t,done){ const m=modal(`<h3>Sao chép thủ công</h3><p class="small muted">Bấm vào ô, Ctrl+A rồi Ctrl+C.</p><textarea style="min-height:160px">${esc(t)}</textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" data-x>Đóng</button></div>`); $('textarea',m).select(); $('[data-x]',m).onclick=()=>m.remove(); }
 
+// ⏱ thời gian mỗi câu & cách trả lời bài tính (dùng cho Đấu trường, Online, Giải đấu)
+const TF={}; function timeUI(id,f){ f.tmul=f.tmul||1; TF[id]=f; return `<div class="row" id="${id}" style="margin-top:10px">
+  <label class="small">⏱ Thời gian mỗi câu <select data-tm>${[[1,'Bình thường'],[1.5,'Gấp rưỡi (×1,5)'],[2,'Gấp đôi (×2)'],[3,'Gấp ba (×3)']].map(([v,n])=>`<option value="${v}" ${+f.tmul===v?'selected':''}>${n}</option>`).join('')}</select></label>
+  <label class="small">🧮 Bài tính <select data-ci><option value="">Trắc nghiệm A B C D</option><option value="1" ${f.calcIn?'selected':''}>Tự điền đáp số</option></select></label>
+  <span class="small muted" style="flex-basis:100%">Bình thường: câu lý thuyết 15–40 giây, bài tính 60–120 giây tuỳ mức. "Tự điền đáp số" chỉ áp dụng cho bài tính.</span></div>`; }
+document.addEventListener('change',e=>{ const sel=e.target; const box=sel.closest&&sel.closest('[id]'); if(!box) return;
+  const f=TF[box.id]; if(!f||!['at','ht','tt'].includes(box.id)) return;
+  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; });
+
 // ===================== NHẠC NỀN · NHẠC CHIẾN THẮNG · LỜI CHÚC MỪNG · PHÁO GIẤY =====================
 // Nhạc tự tổng hợp bằng Web Audio (không dùng bản nhạc có bản quyền). 🎵 bật/tắt nhạc nền, 🔊 bật/tắt hiệu ứng + giọng đọc.
 if(DB.music===undefined) DB.music=true;
@@ -1130,6 +1139,9 @@ const BOT_NAMES=['Bot Mầm','Bot Chồi','Bot Lá','Bot Hoa','Bot Quả','Bot C
 const BOT_EMO=['🌱','🌿','🍃','🌼','🍎','🌳','🌲','🏔️'];
 const KEYSETS=[['1','2','3','4'],['q','w','e','r'],['u','i','o','p'],['7','8','9','0']];
 const ARENA_TIME={1:15,2:25,3:40};
+const CALC_TIME={1:60,2:90,3:120}; // bài tính cần nhiều thời gian hơn
+function qTime(q,f){ return ((q&&q.calc?CALC_TIME:ARENA_TIME)[q&&q.lv]||20)*((f&&+f.tmul)||1); }
+function inMode(m){ return !!(m.cfg.filter&&m.cfg.filter.calcIn&&m.q&&m.q.calc); }
 function botSeat(l){ return {kind:'bot',lvl:l,name:BOT_NAMES[l-1],emo:BOT_EMO[l-1],elo:700+100*l}; }
 function eloExpected(a,b){ return 1/(1+Math.pow(10,(b-a)/400)); }
 
@@ -1149,7 +1161,7 @@ class Match{
     if(A>=t||B>=t||(asked>=this.cap&&!(this.cfg.noDraw&&A===B))) return this.finish();
     this.qi++; this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q;
     this.ans={}; this.winner=null; this.phase='q';
-    this.limit=(ARENA_TIME[this.q.lv]||20)*1000; this.deadline=Date.now()+this.limit;
+    this.limit=qTime(this.q,this.cfg.filter)*1000; this.typed={}; this.deadline=Date.now()+this.limit;
     this.sudden=asked>=this.cap;
     this.timers.push(setTimeout(()=>this.reveal(),this.limit));
     for(const s of this.seatIds()){ const st=this.seats[s]; if(st.kind!=='bot') continue;
@@ -1159,6 +1171,8 @@ class Match{
       if(t<this.limit-300) this.timers.push(setTimeout(()=>this.answer(s,c),t)); }
     this.upd();
   }
+  answerVal(seat,str){ if(this.phase!=='q'||!this.q.calc) return false; const r=calcCheck(this.q.calc,str); if(r===null) return false;
+    this.answer(seat,r?this.q.ans:(this.q.ans+1)%this.q.opts.length); if(this.ans[seat]) this.ans[seat].v=String(str); return true; }
   answer(seat,c){
     if(this.phase!=='q'||!this.seats[seat]||this.ans[seat]) return;
     const ok=c===this.q.ans; this.ans[seat]={c,ok,t:Date.now()};
@@ -1191,7 +1205,7 @@ class Match{
 // ----- Giao diện trận đấu dùng chung (chạy trên máy chủ trận)
 function seatLabel(st){ return `${st.emo||'🙂'} ${esc(st.name)}`; }
 function renderMatch(el,m,opts={}){
-  const ids=m.seatIds(); const q=m.q;
+  const ids=m.seatIds(); const q=m.q; const IM=inMode(m)&&m.phase!=='end';
   { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
     matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
@@ -1207,19 +1221,24 @@ function renderMatch(el,m,opts={}){
     const rev=m.phase==='rev';
     body=`${m.sudden?'<div class="tag l3" style="margin-bottom:6px">⚡ Câu hỏi phụ – ai đúng trước thắng</div>':''}<div class="timer"><i id="tbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${m.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · ${lvTag(q)}</div><div class="qbox">${esc(q.q)}</div>
-     <div class="opts">${q.opts.map((o,i)=>`<div class="opt ${rev&&i===q.ans?'ok':''}"><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>
-     ${rev?`<div class="ex">${m.winner?`✅ ${seatLabel(m.seats[m.winner])} trả lời đúng trước, +1 cho đội ${m.winner[0]}`:'Không ai trả lời đúng.'} Đáp án <b>${'ABCD'[q.ans]}</b>. ${esc(q.ex||'')}</div>`:''}
+     ${IM?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền số vào ô của mình, bấm Enter (gõ 2,5 hoặc 2.5 đều được).</div>`:`<div class="opts">${q.opts.map((o,i)=>`<div class="opt ${rev&&i===q.ans?'ok':''}"><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>`}
+     ${rev?`<div class="ex">${m.winner?`✅ ${seatLabel(m.seats[m.winner])} trả lời đúng trước, +1 cho đội ${m.winner[0]}`:'Không ai trả lời đúng.'} Đáp án <b>${IM?esc(q.opts[q.ans]):'ABCD'[q.ans]}</b>. ${IM?ids.filter(s=>m.ans[s]&&m.ans[s].v).map(s=>`<span class="chip">${esc(m.seats[s].name)}: ${esc(m.ans[s].v)} ${m.ans[s].ok?'✅':'❌'}</span>`).join(' '):''} ${esc(q.ex||'')}</div>`:''}
      ${humans.length?`<div class="pads">${humans.map(s=>{ const ks=m.seats[s].keys; const lk=m.ans[s]||rev;
+        if(IM) return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b></div><div class="row" style="flex-wrap:nowrap"><input type="text" inputmode="decimal" data-in="${s}" value="${esc(m.typed[s]||'')}" placeholder="Đáp số" ${lk?'disabled':''} style="flex:1;min-width:0;font-size:20px"><button class="btn pri" data-go="${s}" ${lk?'disabled':''}>Gửi</button></div>${m.ans[s]&&!rev?`<div class="small">${m.ans[s].ok?'✅':'❌ Sai rồi'}</div>`:''}</div>`;
         return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b> <span class="muted">· phím ${ks.join(' ').toUpperCase()}</span></div><div class="pb">${[0,1,2,3].map(i=>`<button data-s="${s}" data-c="${i}" ${lk?'disabled':''}>${'ABCD'[i]} <span class="small muted">(${ks[i].toUpperCase()})</span></button>`).join('')}</div></div>`; }).join('')}</div>`:''}`;
   }
   el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div></div>
     <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div></div></div>${body}
     ${m.phase!=='end'?`<div class="row" style="justify-content:flex-end;margin-top:12px">${opts.extra||''}<button class="btn ghost sm" id="mquit">Dừng trận</button></div>`:''}</div>`;
   $$('[data-s]',el).forEach(b=>b.onclick=()=>m.answer(b.dataset.s,+b.dataset.c));
+  if(IM){ const go=s=>{ const i=$(`[data-in="${s}"]`,el); const val=i?i.value:''; if(!m.answerVal(s,val)) toast('Nhập một con số nhé'); };
+    $$('[data-in]',el).forEach(i=>{ i.oninput=()=>{ m.typed[i.dataset.in]=i.value; }; i.onfocus=()=>{ m.focusIn=i.dataset.in; }; i.onkeydown=e=>{ if(e.key==='Enter') go(i.dataset.in); }; });
+    $$('[data-go]',el).forEach(b=>b.onclick=()=>go(b.dataset.go));
+    const f=m.focusIn&&$(`[data-in="${m.focusIn}"]`,el)||$('[data-in]:not([disabled])',el); if(f&&!f.disabled){ f.focus(); const L=f.value.length; try{ f.setSelectionRange(L,L); }catch(e){} } }
   const qb=$('#mquit',el); if(qb) qb.onclick=()=>confirmBox('Dừng trận đấu? Kết quả sẽ không được tính.',()=>{ m.stop(); opts.onQuit&&opts.onQuit(); });
 }
 function animTimer(m){ const raf=()=>{ const b=document.getElementById('tbar'); if(!b||m.phase==='end') return; const w=m.phase==='q'?Math.max(0,(m.deadline-Date.now())/m.limit*100):0; b.style.width=w+'%'; requestAnimationFrame(raf); }; requestAnimationFrame(raf); }
-function matchKeys(m){ const h=e=>{ if(m.phase!=='q'||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
+function matchKeys(m){ const h=e=>{ if(m.phase!=='q'||inMode(m)||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return; const k=e.key.toLowerCase();
     for(const s of m.seatIds()){ const st=m.seats[s]; if(st.kind!=='human') continue; const i=st.keys.indexOf(k); if(i>=0){ m.answer(s,i); return; } } };
   document.addEventListener('keydown',h); return ()=>document.removeEventListener('keydown',h); }
 
@@ -1260,7 +1279,7 @@ function viewArena(v){ musicStop();
     <span style="flex:1"></span><label class="small">Đấu đến <select id="atg">${[3,5,7,10,15].map(n=>`<option ${n===ARF.target?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
    <div class="grid g2" style="margin-top:8px"><div>${seatSel('A1')}${two?seatSel('A2'):''}</div><div>${seatSel('B1')}${two?seatSel('B2'):''}</div></div>
    <p class="small muted">Bộ phím theo thứ tự người thật: người 1 dùng <b>1 2 3 4</b>, người 2 <b>Q W E R</b>, người 3 <b>U I O P</b>, người 4 <b>7 8 9 0</b>. Bot cấp 1 rất dễ, cấp 8 gần như không sai. <button class="btn sm ghost" id="anp">＋ Thêm hồ sơ</button></p>
-   ${filterUI('af',ARF)}
+   ${filterUI('af',ARF)}${timeUI('at',ARF)}
    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn pri" id="ago">▶ Bắt đầu trận</button></div></div>
    <div class="card"><h3>Bảng xếp hạng ELO trên máy này</h3><table><tr><th>#</th><th class="l">Người chơi</th><th>ELO</th><th>T</th><th>H</th><th>B</th></tr>
    ${DB.profiles.filter(p=>!p.role||p.role==='hs').sort((a,b)=>b.elo-a.elo).map((p,i)=>`<tr><td>${i+1}</td><td class="l">${p.emo} ${esc(p.name)}</td><td><b>${p.elo}</b></td><td>${p.w}</td><td>${p.d}</td><td>${p.l}</td></tr>`).join('')}</table></div>`;
@@ -1270,7 +1289,7 @@ function viewArena(v){ musicStop();
   $('#anp').onclick=()=>profileDialog(()=>viewArena(v));
   bindFilter('af',ARF);
   $('#ago').onclick=()=>{ const vals=two?{A1:S.A1,A2:S.A2,B1:S.B1,B2:S.B2}:{A1:S.A1,B1:S.B1};
-    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs}}); };
+    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn}}); };
 }
 
 // ===================== ĐẤU ONLINE (Firebase Realtime Database) =====================
@@ -1342,7 +1361,7 @@ function hostLobby(v){
   <div class="card"><h3>🪑 Xếp ghế</h3><div class="row">${['1v1','2v2'].map(x=>`<span class="tog ${C.mode===x?'on':''}" data-mode="${x}">${x==='1v1'?'👤 1 vs 1':'👥 2 vs 2'}</span>`).join('')}<span style="flex:1"></span>
    <label class="small">Đấu đến <select id="htg">${[3,5,7,10,15].map(n=>`<option ${n===C.target?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
    <div class="grid g2" style="margin-top:6px"><div>${seat('A1')}${two?seat('A2'):''}</div><div>${seat('B1')}${two?seat('B2'):''}</div></div>
-   ${filterUI('hf',C)}
+   ${filterUI('hf',C)}${timeUI('ht',C)}
    <div class="row" style="justify-content:space-between;margin-top:14px"><button class="btn ghost" id="hclose">Đóng phòng</button><button class="btn pri" id="hstart">▶ Bắt đầu trận</button></div></div>`;
   ON.lobbyRender=()=>{ if(TAB==='online'&&ON.role==='host'&&!ON.match) hostLobby(v); };
   $$('[data-mode]',v).forEach(t=>t.onclick=()=>{ C.mode=t.dataset.mode; hostLobby(v); });
@@ -1361,17 +1380,17 @@ async function hostStart(v){
   if(!ids.some(s=>s[0]==='A'&&seats[s])||!ids.some(s=>s[0]==='B'&&seats[s])){ toast('Cần người ngồi cả đội A và đội B'); return; }
   const R=roomRef(ON.code); await R.update({st:'play',seats:pub,target:C.target,g:null,a:null,res:null});
   let ansOff=null, curQi=-1;
-  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs},
+  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn},
     onUpdate:mm=>{
       renderMatch(v,mm,{extra:`<span class="chip">Phòng ${ON.code}</span>`,endButtons:`<button class="btn pri" id="hagain">Về sảnh, đấu tiếp</button>`,onQuit:()=>{ R.update({st:'lobby',g:null,a:null}); ON.match=null; hostLobby(v);} });
       if(mm.phase!=='end') animTimer(mm);
       const lock={}; Object.entries(mm.ans||{}).forEach(([s,a])=>lock[s]=a.ok?'ok':'x');
       const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden};
-      if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
+      if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch,inp:inMode(mm)?1:0}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
       if(mm.phase==='rev'){ g.ans=q.ans; g.ex=q.ex||''; g.win=mm.winner||''; }
       R.child('g').set(g);
       if(mm.phase==='q'&&mm.qi!==curQi){ curQi=mm.qi; if(ansOff) ansOff(); const ar=R.child('a/'+mm.qi);
-        const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi) mm.answer(s.key,+val.c); });
+        const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi){ if(val.v!==undefined&&inMode(mm)) mm.answerVal(s.key,val.v); else mm.answer(s.key,+val.c); } });
         ansOff=()=>ar.off('child_added',h); }
       if(mm.phase==='end'){ const b=$('#hagain',v); if(b) b.onclick=()=>{ ON.match=null; R.update({st:'lobby',g:null,a:null}); hostLobby(v); }; }
     },
@@ -1413,8 +1432,9 @@ function guestView(v){
     body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}</div></div>
      ${g.sud?'<div class="tag l3">⚡ Câu hỏi phụ</div>':''}<div class="timer"><i id="gbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${g.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · <span class="tag ${q.lv>1?'l'+q.lv:''}">${(LEVELS[q.lv]||LEVELS[1]).tag}</span></div><div class="qbox">${esc(q.t)}</div>
-     <div class="opts">${q.o.map((o,i)=>`<button class="opt ${rev&&i===g.ans?'ok':''} ${!rev&&picked===i?(mine==='x'?'bad':''):''} ${rev&&picked===i&&i!==g.ans?'bad':''}" data-c="${i}" ${(!mySeat||mine||rev||picked!==undefined)?'disabled':''}><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></button>`).join('')}</div>
-     ${rev?`<div class="ex">${g.win?`✅ ${esc(seats[g.win].e+' '+seats[g.win].n)} đúng trước!`:'Không ai đúng.'} Đáp án <b>${'ABCD'[g.ans]}</b>. ${esc(g.ex)}</div>`:''}
+     ${q.inp?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền đáp số, bấm Enter.</div>${rev?`<div class="ex">Đáp án đúng: <b>${esc(q.o[g.ans])}</b>${picked!==undefined?` · Bạn điền: ${esc(String(picked))}`:''}</div>`:`<div class="row"><input type="text" inputmode="decimal" id="gin" placeholder="Đáp số" style="flex:1;font-size:20px" ${(!mySeat||mine||picked!==undefined)?'disabled':''} value="${picked!==undefined?esc(String(picked)):''}"><button class="btn pri" id="ggo" ${(!mySeat||mine||picked!==undefined)?'disabled':''}>Gửi</button></div>${mine?`<div class="small">${mine==='ok'?'✅ Đúng':'❌ Sai rồi'}</div>`:''}`}`:''}
+     ${q.inp?'':`<div class="opts">${q.o.map((o,i)=>`<button class="opt ${rev&&i===g.ans?'ok':''} ${!rev&&picked===i?(mine==='x'?'bad':''):''} ${rev&&picked===i&&i!==g.ans?'bad':''}" data-c="${i}" ${(!mySeat||mine||rev||picked!==undefined)?'disabled':''}><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></button>`).join('')}</div>`}
+     ${rev?`<div class="ex">${g.win?`✅ ${esc(seats[g.win].e+' '+seats[g.win].n)} đúng trước!`:'Không ai đúng.'} Đáp án <b>${q.inp?esc(q.o[g.ans]):'ABCD'[g.ans]}</b>. ${esc(g.ex)}</div>`:''}
      ${!mySeat?'<p class="small muted">Bạn đang xem (không có ghế trong trận này).</p>':''}`;
     if(!rev&&g.rem){ const dl=Date.now()+g.rem, lim=g.lim||g.rem; clearInterval(GTIMER); GTIMER=setInterval(()=>{ const b=document.getElementById('gbar'); if(!b){clearInterval(GTIMER);return;} b.style.width=Math.max(0,(dl-Date.now())/lim*100)+'%'; },100); } }
   v.innerHTML=`<div class="card">${head}<div style="margin-top:12px">${body}</div></div><p class="small muted">Mẹo: bấm phím 1 2 3 4 để chọn nhanh.</p>`;
@@ -1422,6 +1442,9 @@ function guestView(v){
   const send=c=>{ if(!g||!g.q||g.ph!=='q'||!mySeat) return; const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined) return; ON.myAns[k]=c;
     roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({c,u:FBUID}); guestView(v); };
   $$('[data-c]',v).forEach(b=>b.onclick=()=>send(+b.dataset.c));
+  const gi=$('#gin',v); if(gi){ const sendV=()=>{ const val=gi.value.trim(); if(!/\d/.test(val)){ toast('Nhập một con số nhé'); return; } const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined||g.ph!=='q'||!mySeat) return; ON.myAns[k]=val;
+      roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({v:val,c:-1,u:FBUID}); guestView(v); };
+    gi.onkeydown=e=>{ if(e.key==='Enter') sendV(); }; $('#ggo',v).onclick=sendV; if(!gi.disabled){ gi.value=ON.gtyped&&ON.gtyped.k===ON.code+':'+g.qi?ON.gtyped.v:gi.value; gi.oninput=()=>{ ON.gtyped={k:ON.code+':'+g.qi,v:gi.value}; }; gi.focus(); } }
   if(!ON.keyBound){ ON.keyBound=true; const kh=e=>{ if(TAB!=='online'||ON.role!=='guest') return; if('1234'.includes(e.key)){ const gg=ON.room&&ON.room.g; if(gg) { const btn=$$('[data-c]')[+e.key-1]; if(btn&&!btn.disabled) btn.click(); } } };
     document.addEventListener('keydown',kh); ON.offs.push(()=>document.removeEventListener('keydown',kh)); }
 }
@@ -1570,7 +1593,7 @@ function tourList(v){
    <p class="small muted" id="tmodehint" style="margin:4px 0 0;display:none">Giải Đôi: chọn số bạn chẵn (6–24 bạn = 3–12 đội). Mỗi trận 4 bạn ngồi chung một máy (phím 1234 · QWER · UIOP · 7890), ai trong đội trả lời đúng trước thì đội được điểm.</p>
    <div class="row" style="margin-top:8px"><label class="small">Chia bảng <select id="tsp"><option value="elo">Theo ELO (cân bằng)</option><option value="rand">Ngẫu nhiên</option></select></label>
     <label class="small">Mỗi trận đến <select id="ttg">${[3,5,7,10].map(n=>`<option ${n===5?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
-   ${filterUI('tf',NT.f)}
+   ${filterUI('tf',NT.f)}${timeUI('tt',NT.f)}
    <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🎟 Điều kiện tham gia</h3>
     <div class="row"><label class="small">ELO tối thiểu <input type="number" id="treq" min="0" step="50" value="0" style="width:90px"></label>
      <label class="small">Số câu luyện tập đúng tối thiểu <input type="number" id="treqok" min="0" step="5" value="0" style="width:90px"></label></div>

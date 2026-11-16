@@ -311,7 +311,7 @@ function calcToMCQ(c){ // đổi bài tính thành câu trắc nghiệm 4 lựa 
   const cand=[...(c.w||[]),c.a*2,c.a/2,c.a*10,c.a+1,c.a*1.5].filter(x=>isFinite(x)&&x>=0);
   for(const x of cand){ if(opts.length>=4) break; const s=calcFmt(c,x); if(!opts.includes(s)) opts.push(s); }
   let k=2; while(opts.length<4){ const s=calcFmt(c,c.a+k); if(!opts.includes(s)) opts.push(s); k++; }
-  return {id:'c',src:'calc',ch:c.tr,lv:c.lv,gr:c.g,q:c.q,opts,ex:c.steps.join(' ')};
+  return {id:'c',src:'calc',ch:c.tr,lv:c.lv,gr:c.g,q:c.q,opts,ex:c.steps.join(' '),calc:{a:c.a,d:c.d}};
 }
 function calcCheck(c,str){ // đọc số người dùng nhập: chấp nhận 2,5 · 2.5 · 12.000 · 1 200
   let s=String(str||'').trim().replace(/\s/g,''); if(!s) return null;

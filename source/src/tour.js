@@ -142,7 +142,7 @@ function tourList(v){
    <p class="small muted" id="tmodehint" style="margin:4px 0 0;display:none">Giải Đôi: chọn số bạn chẵn (6–24 bạn = 3–12 đội). Mỗi trận 4 bạn ngồi chung một máy (phím 1234 · QWER · UIOP · 7890), ai trong đội trả lời đúng trước thì đội được điểm.</p>
    <div class="row" style="margin-top:8px"><label class="small">Chia bảng <select id="tsp"><option value="elo">Theo ELO (cân bằng)</option><option value="rand">Ngẫu nhiên</option></select></label>
     <label class="small">Mỗi trận đến <select id="ttg">${[3,5,7,10].map(n=>`<option ${n===5?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
-   ${filterUI('tf',NT.f)}
+   ${filterUI('tf',NT.f)}${timeUI('tt',NT.f)}
    <div class="card" style="margin:12px 0 0;background:var(--bg2,#f6faf7)"><h3 style="margin-top:0">🎟 Điều kiện tham gia</h3>
     <div class="row"><label class="small">ELO tối thiểu <input type="number" id="treq" min="0" step="50" value="0" style="width:90px"></label>
      <label class="small">Số câu luyện tập đúng tối thiểu <input type="number" id="treqok" min="0" step="5" value="0" style="width:90px"></label></div>

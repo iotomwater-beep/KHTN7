@@ -67,7 +67,7 @@ function hostLobby(v){
   <div class="card"><h3>🪑 Xếp ghế</h3><div class="row">${['1v1','2v2'].map(x=>`<span class="tog ${C.mode===x?'on':''}" data-mode="${x}">${x==='1v1'?'👤 1 vs 1':'👥 2 vs 2'}</span>`).join('')}<span style="flex:1"></span>
    <label class="small">Đấu đến <select id="htg">${[3,5,7,10,15].map(n=>`<option ${n===C.target?'selected':''}>${n}</option>`).join('')}</select> điểm</label></div>
    <div class="grid g2" style="margin-top:6px"><div>${seat('A1')}${two?seat('A2'):''}</div><div>${seat('B1')}${two?seat('B2'):''}</div></div>
-   ${filterUI('hf',C)}
+   ${filterUI('hf',C)}${timeUI('ht',C)}
    <div class="row" style="justify-content:space-between;margin-top:14px"><button class="btn ghost" id="hclose">Đóng phòng</button><button class="btn pri" id="hstart">▶ Bắt đầu trận</button></div></div>`;
   ON.lobbyRender=()=>{ if(TAB==='online'&&ON.role==='host'&&!ON.match) hostLobby(v); };
   $$('[data-mode]',v).forEach(t=>t.onclick=()=>{ C.mode=t.dataset.mode; hostLobby(v); });
@@ -86,17 +86,17 @@ async function hostStart(v){
   if(!ids.some(s=>s[0]==='A'&&seats[s])||!ids.some(s=>s[0]==='B'&&seats[s])){ toast('Cần người ngồi cả đội A và đội B'); return; }
   const R=roomRef(ON.code); await R.update({st:'play',seats:pub,target:C.target,g:null,a:null,res:null});
   let ansOff=null, curQi=-1;
-  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs},
+  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn},
     onUpdate:mm=>{
       renderMatch(v,mm,{extra:`<span class="chip">Phòng ${ON.code}</span>`,endButtons:`<button class="btn pri" id="hagain">Về sảnh, đấu tiếp</button>`,onQuit:()=>{ R.update({st:'lobby',g:null,a:null}); ON.match=null; hostLobby(v);} });
       if(mm.phase!=='end') animTimer(mm);
       const lock={}; Object.entries(mm.ans||{}).forEach(([s,a])=>lock[s]=a.ok?'ok':'x');
       const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden};
-      if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
+      if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch,inp:inMode(mm)?1:0}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
       if(mm.phase==='rev'){ g.ans=q.ans; g.ex=q.ex||''; g.win=mm.winner||''; }
       R.child('g').set(g);
       if(mm.phase==='q'&&mm.qi!==curQi){ curQi=mm.qi; if(ansOff) ansOff(); const ar=R.child('a/'+mm.qi);
-        const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi) mm.answer(s.key,+val.c); });
+        const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi){ if(val.v!==undefined&&inMode(mm)) mm.answerVal(s.key,val.v); else mm.answer(s.key,+val.c); } });
         ansOff=()=>ar.off('child_added',h); }
       if(mm.phase==='end'){ const b=$('#hagain',v); if(b) b.onclick=()=>{ ON.match=null; R.update({st:'lobby',g:null,a:null}); hostLobby(v); }; }
     },
@@ -138,8 +138,9 @@ function guestView(v){
     body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}</div></div>
      ${g.sud?'<div class="tag l3">⚡ Câu hỏi phụ</div>':''}<div class="timer"><i id="gbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${g.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · <span class="tag ${q.lv>1?'l'+q.lv:''}">${(LEVELS[q.lv]||LEVELS[1]).tag}</span></div><div class="qbox">${esc(q.t)}</div>
-     <div class="opts">${q.o.map((o,i)=>`<button class="opt ${rev&&i===g.ans?'ok':''} ${!rev&&picked===i?(mine==='x'?'bad':''):''} ${rev&&picked===i&&i!==g.ans?'bad':''}" data-c="${i}" ${(!mySeat||mine||rev||picked!==undefined)?'disabled':''}><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></button>`).join('')}</div>
-     ${rev?`<div class="ex">${g.win?`✅ ${esc(seats[g.win].e+' '+seats[g.win].n)} đúng trước!`:'Không ai đúng.'} Đáp án <b>${'ABCD'[g.ans]}</b>. ${esc(g.ex)}</div>`:''}
+     ${q.inp?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền đáp số, bấm Enter.</div>${rev?`<div class="ex">Đáp án đúng: <b>${esc(q.o[g.ans])}</b>${picked!==undefined?` · Bạn điền: ${esc(String(picked))}`:''}</div>`:`<div class="row"><input type="text" inputmode="decimal" id="gin" placeholder="Đáp số" style="flex:1;font-size:20px" ${(!mySeat||mine||picked!==undefined)?'disabled':''} value="${picked!==undefined?esc(String(picked)):''}"><button class="btn pri" id="ggo" ${(!mySeat||mine||picked!==undefined)?'disabled':''}>Gửi</button></div>${mine?`<div class="small">${mine==='ok'?'✅ Đúng':'❌ Sai rồi'}</div>`:''}`}`:''}
+     ${q.inp?'':`<div class="opts">${q.o.map((o,i)=>`<button class="opt ${rev&&i===g.ans?'ok':''} ${!rev&&picked===i?(mine==='x'?'bad':''):''} ${rev&&picked===i&&i!==g.ans?'bad':''}" data-c="${i}" ${(!mySeat||mine||rev||picked!==undefined)?'disabled':''}><b class="k">${'ABCD'[i]}</b><span>${esc(o)}</span></button>`).join('')}</div>`}
+     ${rev?`<div class="ex">${g.win?`✅ ${esc(seats[g.win].e+' '+seats[g.win].n)} đúng trước!`:'Không ai đúng.'} Đáp án <b>${q.inp?esc(q.o[g.ans]):'ABCD'[g.ans]}</b>. ${esc(g.ex)}</div>`:''}
      ${!mySeat?'<p class="small muted">Bạn đang xem (không có ghế trong trận này).</p>':''}`;
     if(!rev&&g.rem){ const dl=Date.now()+g.rem, lim=g.lim||g.rem; clearInterval(GTIMER); GTIMER=setInterval(()=>{ const b=document.getElementById('gbar'); if(!b){clearInterval(GTIMER);return;} b.style.width=Math.max(0,(dl-Date.now())/lim*100)+'%'; },100); } }
   v.innerHTML=`<div class="card">${head}<div style="margin-top:12px">${body}</div></div><p class="small muted">Mẹo: bấm phím 1 2 3 4 để chọn nhanh.</p>`;
@@ -147,6 +148,9 @@ function guestView(v){
   const send=c=>{ if(!g||!g.q||g.ph!=='q'||!mySeat) return; const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined) return; ON.myAns[k]=c;
     roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({c,u:FBUID}); guestView(v); };
   $$('[data-c]',v).forEach(b=>b.onclick=()=>send(+b.dataset.c));
+  const gi=$('#gin',v); if(gi){ const sendV=()=>{ const val=gi.value.trim(); if(!/\d/.test(val)){ toast('Nhập một con số nhé'); return; } const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined||g.ph!=='q'||!mySeat) return; ON.myAns[k]=val;
+      roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({v:val,c:-1,u:FBUID}); guestView(v); };
+    gi.onkeydown=e=>{ if(e.key==='Enter') sendV(); }; $('#ggo',v).onclick=sendV; if(!gi.disabled){ gi.value=ON.gtyped&&ON.gtyped.k===ON.code+':'+g.qi?ON.gtyped.v:gi.value; gi.oninput=()=>{ ON.gtyped={k:ON.code+':'+g.qi,v:gi.value}; }; gi.focus(); } }
   if(!ON.keyBound){ ON.keyBound=true; const kh=e=>{ if(TAB!=='online'||ON.role!=='guest') return; if('1234'.includes(e.key)){ const gg=ON.room&&ON.room.g; if(gg) { const btn=$$('[data-c]')[+e.key-1]; if(btn&&!btn.disabled) btn.click(); } } };
     document.addEventListener('keydown',kh); ON.offs.push(()=>document.removeEventListener('keydown',kh)); }
 }
