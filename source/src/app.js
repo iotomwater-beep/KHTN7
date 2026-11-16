@@ -61,14 +61,22 @@ function makeDeck(f,n){ // trộn câu có sẵn + câu sinh tự động
 function lvTag(q){ const L=LEVELS[q.lv]||LEVELS[1]; return `${q.gr?`<span class="tag ${q.gr!=='7'?'l2':''}">${CALC_GR[q.gr]}</span> `:''}<span class="tag ${q.lv>1?'l'+q.lv:''}">${q.gr?LVN[q.lv]:L.tag}</span>${q.mine?` <span class="tag my">✍ ${esc(SRC[q.src]||q.src)}${q.note?' · '+esc(q.note):''}</span>`:''}${q.src==='gen'?' <span class="tag my">🎲 số liệu mới</span>':''}`; }
 
 // ----- Bộ lọc chung (chương / mức / nguồn)
-function filterUI(id,f){ return `<div id="${id}">${filterInner(f)}</div>`; }
+function filterUI(id,f){ if(['af','hf','tf'].includes(id)) f.allowMix=1; return `<div id="${id}">${filterInner(f)}</div>`; }
 function filterInner(f){
   f.bank=f.bank||'khtn'; f.chs=f.chs||[]; f.lvs=f.lvs||[]; f.mine=f.mine||'all'; f.trs=f.trs||[]; f.grs=f.grs||['7'];
-  const bank=`<label class="f">Kho câu hỏi</label><div class="row"><span class="tog ${f.bank==='khtn'?'on':''}" data-bank="khtn">📘 Trắc nghiệm KHTN 7</span><span class="tog ${f.bank==='calc'?'on':''}" data-bank="calc">🧮 Bài tính Lý · Hóa · Sinh</span></div>`;
+  const bank=`<label class="f">Kho câu hỏi</label><div class="row"><span class="tog ${f.bank==='khtn'?'on':''}" data-bank="khtn">📘 Trắc nghiệm KHTN 7</span><span class="tog ${f.bank==='calc'?'on':''}" data-bank="calc">🧮 Bài tính Lý · Hóa · Sinh</span>${f.allowMix?`<span class="tog ${f.bank==='mix'?'on':''}" data-bank="mix">🎯 Trộn: Trắc nghiệm + Bài tính về đích</span>`:''}</div>`;
+  f.clvs=f.clvs||[];
+  const calcPart=(lvKey)=>`<label class="f">Môn bài tính (bỏ trống = trộn)</label><div class="row">${Object.entries(CALC_TR).map(([k,t])=>`<span class="tog ${f.trs.includes(k)?'on':''}" data-tr="${k}">${t.ic} ${t.name}</span>`).join('')}</div>
+   <label class="f">Khối bài tính</label><div class="row">${Object.entries(CALC_GR).map(([k,t])=>`<span class="tog ${f.grs.includes(k)?'on':''}" data-gr="${k}">${t}${k!=='7'?' (mở rộng)':''}</span>`).join('')}</div>
+   <label class="f">Mức bài tính (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f[lvKey].includes(l)?'on':''}" data-${lvKey==='lvs'?'lv':'clv'}="${l}">${LVN[l]}</span>`).join('')}</div>`;
+  if(f.bank==='mix') return bank+`<p class="small muted" style="margin:6px 0">Đầu trận ra câu trắc nghiệm KHTN 7 (thỉnh thoảng xen bài tính). Khi một đội sắp về đích, trận chuyển sang <b>bài tính tự luận</b> – có thể đặt ⭐ ngôi sao hy vọng.</p>
+  <label class="f">Chương trắc nghiệm (bỏ trống = tất cả)</label><div class="row">${CHAPTERS.map(c=>`<span class="tog ${f.chs.includes(c.id)?'on':''}" data-ch="${c.id}">${c.ic} ${c.short}</span>`).join('')}</div>
+  <label class="f">Mức trắc nghiệm (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LEVELS[l].name}</span>`).join('')}</div>
+  <label class="f">Nguồn câu trắc nghiệm</label><div class="row">${[['all','Câu có sẵn + câu của tôi'],['none','Chỉ câu có sẵn'],['only',`Chỉ câu của tôi (${DB.myQ.length})`],['class',`📚 Chỉ câu của lớp (${DB.myQ.filter(q=>q.shared).length})`]].map(([v,t])=>`<span class="tog ${f.mine===v?'on':''}" data-mine="${v}">${t}</span>`).join('')}</div>`+calcPart('clvs');
   if(f.bank==='calc') return bank+`<label class="f">Môn (bỏ trống = trộn)</label><div class="row">${Object.entries(CALC_TR).map(([k,t])=>`<span class="tog ${f.trs.includes(k)?'on':''}" data-tr="${k}">${t.ic} ${t.name}</span>`).join('')}</div>
    <label class="f">Khối</label><div class="row">${Object.entries(CALC_GR).map(([k,t])=>`<span class="tog ${f.grs.includes(k)?'on':''}" data-gr="${k}">${t}${k!=='7'?' (mở rộng)':''}</span>`).join('')}</div>
    <label class="f">Mức (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LVN[l]}</span>`).join('')}</div>
-   <p class="small muted">Bài tính được đổi thành 4 lựa chọn đáp số (có đáp số sai theo lỗi thường gặp) để đấu nhanh. Thời gian mỗi câu: cơ bản 15 s, nâng cao 25 s, HSG 40 s.</p>`;
+   <p class="small muted">Bài tính: trắc nghiệm 4 đáp số (có đáp số sai theo lỗi thường gặp) hoặc tự điền đáp số. Thời gian mỗi câu: cơ bản 60 s, tư duy 90 s, HSG 120 s (có thể nhân thêm).</p>`;
   return bank+`<label class="f">Chương (bỏ trống = tất cả)</label><div class="row">${CHAPTERS.map(c=>`<span class="tog ${f.chs.includes(c.id)?'on':''}" data-ch="${c.id}">${c.ic} ${c.short}</span>`).join('')}</div>
   <label class="f">Mức độ (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LEVELS[l].name}</span>`).join('')}</div>
   <label class="f">Nguồn câu hỏi</label><div class="row">${[['all','Câu có sẵn + câu của tôi'],['none','Chỉ câu có sẵn'],['only',`Chỉ câu của tôi (${DB.myQ.length})`],['class',`📚 Chỉ câu của lớp (${DB.myQ.filter(q=>q.shared).length})`]].map(([v,t])=>`<span class="tog ${f.mine===v?'on':''}" data-mine="${v}">${t}</span>`).join('')}</div>`;
@@ -81,6 +89,7 @@ function bindFilter(id,f,onchg){
   $$('[data-tr]',r).forEach(t=>t.onclick=()=>tgl(f.trs,t.dataset.tr,t));
   $$('[data-gr]',r).forEach(t=>t.onclick=()=>tgl(f.grs,t.dataset.gr,t));
   $$('[data-lv]',r).forEach(t=>t.onclick=()=>tgl(f.lvs,+t.dataset.lv,t));
+  $$('[data-clv]',r).forEach(t=>t.onclick=()=>tgl(f.clvs,+t.dataset.clv,t));
   $$('[data-mine]',r).forEach(t=>t.onclick=()=>{ f.mine=t.dataset.mine; $$('[data-mine]',r).forEach(x=>x.classList.toggle('on',x===t)); onchg&&onchg(); });
 }
 
@@ -267,7 +276,8 @@ function fallbackCopy(t,done){ const m=modal(`<h3>Sao chép thủ công</h3><p c
 const TF={}; function timeUI(id,f){ f.tmul=f.tmul||1; TF[id]=f; return `<div class="row" id="${id}" style="margin-top:10px">
   <label class="small">⏱ Thời gian mỗi câu <select data-tm>${[[1,'Bình thường'],[1.5,'Gấp rưỡi (×1,5)'],[2,'Gấp đôi (×2)'],[3,'Gấp ba (×3)']].map(([v,n])=>`<option value="${v}" ${+f.tmul===v?'selected':''}>${n}</option>`).join('')}</select></label>
   <label class="small">🧮 Bài tính <select data-ci><option value="">Trắc nghiệm A B C D</option><option value="1" ${f.calcIn?'selected':''}>Tự điền đáp số</option></select></label>
+  <label class="small">⭐ Ngôi sao hy vọng <select data-st><option value="">Tắt</option><option value="1" ${f.star?'selected':''}>Bật cho bài tính về đích</option></select></label>
   <span class="small muted" style="flex-basis:100%">Bình thường: câu lý thuyết 15–40 giây, bài tính 60–120 giây tuỳ mức. "Tự điền đáp số" chỉ áp dụng cho bài tính.</span></div>`; }
 document.addEventListener('change',e=>{ const sel=e.target; const box=sel.closest&&sel.closest('[id]'); if(!box) return;
   const f=TF[box.id]; if(!f||!['at','ht','tt'].includes(box.id)) return;
-  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; });
+  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; if(sel.matches('[data-st]')) f.star=!!sel.value; });

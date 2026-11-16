@@ -13,9 +13,15 @@ function eloExpected(a,b){ return 1/(1+Math.pow(10,(b-a)/400)); }
 class Match{
   constructor(cfg){ // cfg: {seats:{A1:{..},B1:{..},..}, target, filter, noDraw, onUpdate, onEnd}
     this.cfg=cfg; this.seats=cfg.seats; this.score={A:0,B:0}; this.qi=-1; this.q=null; this.phase='ready';
-    this.cap=cfg.target*2+6; this.timers=[]; this.history=[]; this.deck=makeDeck(cfg.filter,this.cap+20); this.extra=0;
+    this.cap=cfg.target*2+6; this.timers=[]; this.history=[]; this.extra=0; const f=cfg.filter||{};
+    if(f.bank==='mix'){ this.deck=makeDeck(Object.assign({},f,{bank:'khtn'}),this.cap+20); this.cdeck=calcDeck({trs:f.trs,grs:f.grs,lvs:f.clvs},this.cap+20).map(calcToMCQ).map(prep); this.ti=0; this.ci=0; }
+    else this.deck=makeDeck(f,this.cap+20);
+    this.star={A:0,B:0}; this.starOn={};
   }
   team(s){ return s[0]; }
+  finStage(asked){ const t=this.cfg.target, mx=Math.max(this.score.A,this.score.B); return (asked??this.qi)>=this.cap||mx>=t-(t>=7?2:1); }
+  starOK(tm){ const f=this.cfg.filter||{}; return !!(f.star&&this.phase==='q'&&this.q&&this.q.calc&&this.finStage(this.qi)&&!this.star[tm]&&!this.seatIds().some(s=>s[0]===tm&&this.ans[s])); }
+  useStar(tm){ if(!this.starOK(tm)) return false; this.star[tm]=1; this.starOn[tm]=1; try{ fanfare&&DB.sound&&beep(true); }catch(e){} this.upd(); return true; }
   seatIds(){ return Object.keys(this.seats).filter(k=>this.seats[k]); }
   clearT(){ this.timers.forEach(clearTimeout); this.timers=[]; }
   start(){ this.next(); }
@@ -24,7 +30,10 @@ class Match{
     const {A,B}=this.score, t=this.cfg.target;
     const asked=this.qi+1;
     if(A>=t||B>=t||(asked>=this.cap&&!(this.cfg.noDraw&&A===B))) return this.finish();
-    this.qi++; this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q;
+    this.qi++; this.starOn={}; this.starMsg='';
+    if(this.cdeck){ const fin=this.finStage(asked); const useC=this.cdeck.length&&(fin||Math.random()<0.2);
+      this.q=useC?this.cdeck[this.ci++%this.cdeck.length]:(this.deck[this.ti++]||prep(pick(pool({})))); }
+    else { this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q; }
     this.ans={}; this.winner=null; this.phase='q';
     this.limit=qTime(this.q,this.cfg.filter)*1000; this.typed={}; this.deadline=Date.now()+this.limit;
     this.sudden=asked>=this.cap;
@@ -41,13 +50,14 @@ class Match{
   answer(seat,c){
     if(this.phase!=='q'||!this.seats[seat]||this.ans[seat]) return;
     const ok=c===this.q.ans; this.ans[seat]={c,ok,t:Date.now()};
-    if(ok){ this.winner=seat; this.score[this.team(seat)]++; beep(true); return this.reveal(); }
+    if(ok){ this.winner=seat; this.score[this.team(seat)]+=this.starOn[this.team(seat)]?2:1; beep(true); return this.reveal(); }
     beep(false);
     // đội có tất cả thành viên đã sai thì không trả lời được nữa; nếu mọi ghế đã trả lời → lộ đáp án
     if(this.seatIds().every(s=>this.ans[s])) return this.reveal();
     this.upd();
   }
   reveal(){ if(this.phase!=='q') return; this.clearT(); this.phase='rev';
+    const msg=[]; ['A','B'].forEach(tm=>{ if(!this.starOn[tm]) return; if(this.winner&&this.winner[0]===tm) msg.push(`⭐ Đội ${tm} đặt ngôi sao hy vọng và trả lời đúng: +2 điểm!`); else { const lost=this.score[tm]>0?1:0; this.score[tm]-=lost; msg.push(`⭐ Đội ${tm} đặt ngôi sao nhưng chưa đúng: ${lost?'−1 điểm':'không bị trừ (đang 0 điểm)'}.`); } }); this.starMsg=msg.join(' ');
     this.history.push({q:this.q,winner:this.winner,ans:this.ans,t0:this.deadline-this.limit});
     this.upd(); this.timers.push(setTimeout(()=>this.next(),this.cfg.revealMs||3200)); }
   finish(){
@@ -73,6 +83,9 @@ function renderMatch(el,m,opts={}){
   const ids=m.seatIds(); const q=m.q; const IM=inMode(m)&&m.phase!=='end';
   { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
     matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
+  const SF=(m.cfg.filter||{}).star; const starBox=t=>{ if(!SF||m.phase==='end') return ''; const on=m.starOn&&m.starOn[t];
+    const btn=m.starOK&&m.starOK(t)&&ids.some(s=>s[0]===t&&m.seats[s].kind==='human')?`<button class="btn sm" style="background:#f2b705;color:#3b2a00;margin-top:4px" data-star="${t}">⭐ Đặt ngôi sao hy vọng</button>`:'';
+    return `<div class="small" style="margin-top:4px">${on?'<b style="color:#c48a00">⭐ ĐANG ĐẶT NGÔI SAO</b>':m.star[t]?'<span class="muted">⭐ đã dùng</span>':'<span class="muted">⭐ còn 1 ngôi sao</span>'}</div>${btn}`; };
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
   let body='';
   if(m.phase==='end'){
@@ -92,10 +105,11 @@ function renderMatch(el,m,opts={}){
         if(IM) return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b></div><div class="row" style="flex-wrap:nowrap"><input type="text" inputmode="decimal" data-in="${s}" value="${esc(m.typed[s]||'')}" placeholder="Đáp số" ${lk?'disabled':''} style="flex:1;min-width:0;font-size:20px"><button class="btn pri" data-go="${s}" ${lk?'disabled':''}>Gửi</button></div>${m.ans[s]&&!rev?`<div class="small">${m.ans[s].ok?'✅':'❌ Sai rồi'}</div>`:''}</div>`;
         return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b> <span class="muted">· phím ${ks.join(' ').toUpperCase()}</span></div><div class="pb">${[0,1,2,3].map(i=>`<button data-s="${s}" data-c="${i}" ${lk?'disabled':''}>${'ABCD'[i]} <span class="small muted">(${ks[i].toUpperCase()})</span></button>`).join('')}</div></div>`; }).join('')}</div>`:''}`;
   }
-  el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div></div>
-    <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div></div></div>${body}
+  el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div>${starBox('A')}</div>
+    <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div>${starBox('B')}</div></div>${SF&&m.phase==='q'&&m.q&&m.q.calc&&m.finStage(m.qi)&&(!m.star.A||!m.star.B)?'<div class="small" style="text-align:center;margin:6px 0;color:#9a6b00">🏁 Câu về đích – mỗi đội có 1 ngôi sao hy vọng: đúng +2 điểm, sai −1 điểm. Phải đặt trước khi đội mình trả lời.</div>':''}${m.phase==='rev'&&m.starMsg?`<div class="ex" style="background:#fff6d6">${esc(m.starMsg)}</div>`:''}${body}
     ${m.phase!=='end'?`<div class="row" style="justify-content:flex-end;margin-top:12px">${opts.extra||''}<button class="btn ghost sm" id="mquit">Dừng trận</button></div>`:''}</div>`;
   $$('[data-s]',el).forEach(b=>b.onclick=()=>m.answer(b.dataset.s,+b.dataset.c));
+  $$('[data-star]',el).forEach(b=>b.onclick=()=>m.useStar(b.dataset.star));
   if(IM){ const go=s=>{ const i=$(`[data-in="${s}"]`,el); const val=i?i.value:''; if(!m.answerVal(s,val)) toast('Nhập một con số nhé'); };
     $$('[data-in]',el).forEach(i=>{ i.oninput=()=>{ m.typed[i.dataset.in]=i.value; }; i.onfocus=()=>{ m.focusIn=i.dataset.in; }; i.onkeydown=e=>{ if(e.key==='Enter') go(i.dataset.in); }; });
     $$('[data-go]',el).forEach(b=>b.onclick=()=>go(b.dataset.go));
@@ -154,5 +168,5 @@ function viewArena(v){ musicStop();
   $('#anp').onclick=()=>profileDialog(()=>viewArena(v));
   bindFilter('af',ARF);
   $('#ago').onclick=()=>{ const vals=two?{A1:S.A1,A2:S.A2,B1:S.B1,B2:S.B2}:{A1:S.A1,B1:S.B1};
-    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn}}); };
+    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn,clvs:ARF.clvs,star:ARF.star}}); };
 }

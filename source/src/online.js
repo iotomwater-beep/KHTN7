@@ -86,18 +86,19 @@ async function hostStart(v){
   if(!ids.some(s=>s[0]==='A'&&seats[s])||!ids.some(s=>s[0]==='B'&&seats[s])){ toast('Cần người ngồi cả đội A và đội B'); return; }
   const R=roomRef(ON.code); await R.update({st:'play',seats:pub,target:C.target,g:null,a:null,res:null});
   let ansOff=null, curQi=-1;
-  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn},
+  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn,clvs:C.clvs,star:C.star},
     onUpdate:mm=>{
       renderMatch(v,mm,{extra:`<span class="chip">Phòng ${ON.code}</span>`,endButtons:`<button class="btn pri" id="hagain">Về sảnh, đấu tiếp</button>`,onQuit:()=>{ R.update({st:'lobby',g:null,a:null}); ON.match=null; hostLobby(v);} });
       if(mm.phase!=='end') animTimer(mm);
       const lock={}; Object.entries(mm.ans||{}).forEach(([s,a])=>lock[s]=a.ok?'ok':'x');
-      const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden};
+      const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden,sf:(mm.cfg.filter||{}).star?1:0,st:{A:mm.star.A?(mm.starOn.A?2:1):0,B:mm.star.B?(mm.starOn.B?2:1):0},se:{A:mm.starOK('A')?1:0,B:mm.starOK('B')?1:0},sm:mm.phase==='rev'?(mm.starMsg||''):''};
       if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch,inp:inMode(mm)?1:0}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
       if(mm.phase==='rev'){ g.ans=q.ans; g.ex=q.ex||''; g.win=mm.winner||''; }
       R.child('g').set(g);
       if(mm.phase==='q'&&mm.qi!==curQi){ curQi=mm.qi; if(ansOff) ansOff(); const ar=R.child('a/'+mm.qi);
         const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi){ if(val.v!==undefined&&inMode(mm)) mm.answerVal(s.key,val.v); else mm.answer(s.key,+val.c); } });
-        ansOff=()=>ar.off('child_added',h); }
+        const sr=R.child('st/'+mm.qi); const hs=sr.on('child_added',x=>{ const tm=x.key, u=x.val(); if(mm.qi!==curQi) return; if(mm.seatIds().some(s=>s[0]===tm&&mm.seats[s].kind==='remote'&&mm.seats[s].uid===u)) mm.useStar(tm); });
+        ansOff=()=>{ ar.off('child_added',h); sr.off('child_added',hs); }; }
       if(mm.phase==='end'){ const b=$('#hagain',v); if(b) b.onclick=()=>{ ON.match=null; R.update({st:'lobby',g:null,a:null}); hostLobby(v); }; }
     },
     onEnd:mm=>{ if(ansOff) ansOff(); const d={}; Object.entries(mm.delta||{}).forEach(([s,x])=>{ if(mm.seats[s].uid) d[mm.seats[s].uid]=x; });
@@ -135,7 +136,8 @@ function guestView(v){
     body=`<div class="champ"><div class="big">${res.r==='D'?'🤝 Hoà':my?(res.r===my?'🏆 Thắng rồi!':'💪 Thua sát nút!'):'Đội '+res.r+' thắng'}</div><p>Tỉ số ${res.sc.A} – ${res.sc.B}</p>${d!==undefined?`<span class="chip">ELO ${d>=0?'+':''}${d} → ${p.elo}</span>`:''}<p class="small muted">Chờ trọng tài mở trận tiếp…</p></div>`; }
   else if(g.q){ const q=g.q, rev=g.ph==='rev'; const mine=mySeat&&g.lock&&g.lock[mySeat]; const picked=ON.myAns[ON.code+':'+g.qi];
     const team=t=>Object.keys(seats).filter(s=>s[0]===t).map(s=>`<span class="seat ${g.lock&&g.lock[s]?(g.lock[s]==='ok'?'ok':'x'):''}">${esc(seats[s].e)} ${esc(seats[s].n)}</span>`).join('');
-    body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}</div></div>
+    const gst=t=>!g.sf?'':`<div class="small">${g.st&&g.st[t]===2?'<b style="color:#c48a00">⭐ ĐANG ĐẶT NGÔI SAO</b>':g.st&&g.st[t]?'<span class="muted">⭐ đã dùng</span>':'<span class="muted">⭐ còn 1 ngôi sao</span>'}</div>${g.se&&g.se[t]&&mySeat&&mySeat[0]===t?`<button class="btn sm" style="background:#f2b705;color:#3b2a00" id="gstar">⭐ Đặt ngôi sao hy vọng</button>`:''}`;
+    body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}${gst('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}${gst('B')}</div></div>${g.sm?`<div class="ex" style="background:#fff6d6">${esc(g.sm)}</div>`:''}
      ${g.sud?'<div class="tag l3">⚡ Câu hỏi phụ</div>':''}<div class="timer"><i id="gbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${g.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · <span class="tag ${q.lv>1?'l'+q.lv:''}">${(LEVELS[q.lv]||LEVELS[1]).tag}</span></div><div class="qbox">${esc(q.t)}</div>
      ${q.inp?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền đáp số, bấm Enter.</div>${rev?`<div class="ex">Đáp án đúng: <b>${esc(q.o[g.ans])}</b>${picked!==undefined?` · Bạn điền: ${esc(String(picked))}`:''}</div>`:`<div class="row"><input type="text" inputmode="decimal" id="gin" placeholder="Đáp số" style="flex:1;font-size:20px" ${(!mySeat||mine||picked!==undefined)?'disabled':''} value="${picked!==undefined?esc(String(picked)):''}"><button class="btn pri" id="ggo" ${(!mySeat||mine||picked!==undefined)?'disabled':''}>Gửi</button></div>${mine?`<div class="small">${mine==='ok'?'✅ Đúng':'❌ Sai rồi'}</div>`:''}`}`:''}
@@ -148,6 +150,7 @@ function guestView(v){
   const send=c=>{ if(!g||!g.q||g.ph!=='q'||!mySeat) return; const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined) return; ON.myAns[k]=c;
     roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({c,u:FBUID}); guestView(v); };
   $$('[data-c]',v).forEach(b=>b.onclick=()=>send(+b.dataset.c));
+  const gs=$('#gstar',v); if(gs) gs.onclick=()=>{ gs.disabled=true; roomRef(ON.code).child(`st/${g.qi}/${mySeat[0]}`).set(FBUID); };
   const gi=$('#gin',v); if(gi){ const sendV=()=>{ const val=gi.value.trim(); if(!/\d/.test(val)){ toast('Nhập một con số nhé'); return; } const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined||g.ph!=='q'||!mySeat) return; ON.myAns[k]=val;
       roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({v:val,c:-1,u:FBUID}); guestView(v); };
     gi.onkeydown=e=>{ if(e.key==='Enter') sendV(); }; $('#ggo',v).onclick=sendV; if(!gi.disabled){ gi.value=ON.gtyped&&ON.gtyped.k===ON.code+':'+g.qi?ON.gtyped.v:gi.value; gi.oninput=()=>{ ON.gtyped={k:ON.code+':'+g.qi,v:gi.value}; }; gi.focus(); } }

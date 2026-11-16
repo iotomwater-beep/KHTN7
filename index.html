@@ -878,14 +878,22 @@ function makeDeck(f,n){ // trộn câu có sẵn + câu sinh tự động
 function lvTag(q){ const L=LEVELS[q.lv]||LEVELS[1]; return `${q.gr?`<span class="tag ${q.gr!=='7'?'l2':''}">${CALC_GR[q.gr]}</span> `:''}<span class="tag ${q.lv>1?'l'+q.lv:''}">${q.gr?LVN[q.lv]:L.tag}</span>${q.mine?` <span class="tag my">✍ ${esc(SRC[q.src]||q.src)}${q.note?' · '+esc(q.note):''}</span>`:''}${q.src==='gen'?' <span class="tag my">🎲 số liệu mới</span>':''}`; }
 
 // ----- Bộ lọc chung (chương / mức / nguồn)
-function filterUI(id,f){ return `<div id="${id}">${filterInner(f)}</div>`; }
+function filterUI(id,f){ if(['af','hf','tf'].includes(id)) f.allowMix=1; return `<div id="${id}">${filterInner(f)}</div>`; }
 function filterInner(f){
   f.bank=f.bank||'khtn'; f.chs=f.chs||[]; f.lvs=f.lvs||[]; f.mine=f.mine||'all'; f.trs=f.trs||[]; f.grs=f.grs||['7'];
-  const bank=`<label class="f">Kho câu hỏi</label><div class="row"><span class="tog ${f.bank==='khtn'?'on':''}" data-bank="khtn">📘 Trắc nghiệm KHTN 7</span><span class="tog ${f.bank==='calc'?'on':''}" data-bank="calc">🧮 Bài tính Lý · Hóa · Sinh</span></div>`;
+  const bank=`<label class="f">Kho câu hỏi</label><div class="row"><span class="tog ${f.bank==='khtn'?'on':''}" data-bank="khtn">📘 Trắc nghiệm KHTN 7</span><span class="tog ${f.bank==='calc'?'on':''}" data-bank="calc">🧮 Bài tính Lý · Hóa · Sinh</span>${f.allowMix?`<span class="tog ${f.bank==='mix'?'on':''}" data-bank="mix">🎯 Trộn: Trắc nghiệm + Bài tính về đích</span>`:''}</div>`;
+  f.clvs=f.clvs||[];
+  const calcPart=(lvKey)=>`<label class="f">Môn bài tính (bỏ trống = trộn)</label><div class="row">${Object.entries(CALC_TR).map(([k,t])=>`<span class="tog ${f.trs.includes(k)?'on':''}" data-tr="${k}">${t.ic} ${t.name}</span>`).join('')}</div>
+   <label class="f">Khối bài tính</label><div class="row">${Object.entries(CALC_GR).map(([k,t])=>`<span class="tog ${f.grs.includes(k)?'on':''}" data-gr="${k}">${t}${k!=='7'?' (mở rộng)':''}</span>`).join('')}</div>
+   <label class="f">Mức bài tính (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f[lvKey].includes(l)?'on':''}" data-${lvKey==='lvs'?'lv':'clv'}="${l}">${LVN[l]}</span>`).join('')}</div>`;
+  if(f.bank==='mix') return bank+`<p class="small muted" style="margin:6px 0">Đầu trận ra câu trắc nghiệm KHTN 7 (thỉnh thoảng xen bài tính). Khi một đội sắp về đích, trận chuyển sang <b>bài tính tự luận</b> – có thể đặt ⭐ ngôi sao hy vọng.</p>
+  <label class="f">Chương trắc nghiệm (bỏ trống = tất cả)</label><div class="row">${CHAPTERS.map(c=>`<span class="tog ${f.chs.includes(c.id)?'on':''}" data-ch="${c.id}">${c.ic} ${c.short}</span>`).join('')}</div>
+  <label class="f">Mức trắc nghiệm (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LEVELS[l].name}</span>`).join('')}</div>
+  <label class="f">Nguồn câu trắc nghiệm</label><div class="row">${[['all','Câu có sẵn + câu của tôi'],['none','Chỉ câu có sẵn'],['only',`Chỉ câu của tôi (${DB.myQ.length})`],['class',`📚 Chỉ câu của lớp (${DB.myQ.filter(q=>q.shared).length})`]].map(([v,t])=>`<span class="tog ${f.mine===v?'on':''}" data-mine="${v}">${t}</span>`).join('')}</div>`+calcPart('clvs');
   if(f.bank==='calc') return bank+`<label class="f">Môn (bỏ trống = trộn)</label><div class="row">${Object.entries(CALC_TR).map(([k,t])=>`<span class="tog ${f.trs.includes(k)?'on':''}" data-tr="${k}">${t.ic} ${t.name}</span>`).join('')}</div>
    <label class="f">Khối</label><div class="row">${Object.entries(CALC_GR).map(([k,t])=>`<span class="tog ${f.grs.includes(k)?'on':''}" data-gr="${k}">${t}${k!=='7'?' (mở rộng)':''}</span>`).join('')}</div>
    <label class="f">Mức (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LVN[l]}</span>`).join('')}</div>
-   <p class="small muted">Bài tính được đổi thành 4 lựa chọn đáp số (có đáp số sai theo lỗi thường gặp) để đấu nhanh. Thời gian mỗi câu: cơ bản 15 s, nâng cao 25 s, HSG 40 s.</p>`;
+   <p class="small muted">Bài tính: trắc nghiệm 4 đáp số (có đáp số sai theo lỗi thường gặp) hoặc tự điền đáp số. Thời gian mỗi câu: cơ bản 60 s, tư duy 90 s, HSG 120 s (có thể nhân thêm).</p>`;
   return bank+`<label class="f">Chương (bỏ trống = tất cả)</label><div class="row">${CHAPTERS.map(c=>`<span class="tog ${f.chs.includes(c.id)?'on':''}" data-ch="${c.id}">${c.ic} ${c.short}</span>`).join('')}</div>
   <label class="f">Mức độ (bỏ trống = trộn)</label><div class="row">${[1,2,3].map(l=>`<span class="tog ${f.lvs.includes(l)?'on':''}" data-lv="${l}">${LEVELS[l].name}</span>`).join('')}</div>
   <label class="f">Nguồn câu hỏi</label><div class="row">${[['all','Câu có sẵn + câu của tôi'],['none','Chỉ câu có sẵn'],['only',`Chỉ câu của tôi (${DB.myQ.length})`],['class',`📚 Chỉ câu của lớp (${DB.myQ.filter(q=>q.shared).length})`]].map(([v,t])=>`<span class="tog ${f.mine===v?'on':''}" data-mine="${v}">${t}</span>`).join('')}</div>`;
@@ -898,6 +906,7 @@ function bindFilter(id,f,onchg){
   $$('[data-tr]',r).forEach(t=>t.onclick=()=>tgl(f.trs,t.dataset.tr,t));
   $$('[data-gr]',r).forEach(t=>t.onclick=()=>tgl(f.grs,t.dataset.gr,t));
   $$('[data-lv]',r).forEach(t=>t.onclick=()=>tgl(f.lvs,+t.dataset.lv,t));
+  $$('[data-clv]',r).forEach(t=>t.onclick=()=>tgl(f.clvs,+t.dataset.clv,t));
   $$('[data-mine]',r).forEach(t=>t.onclick=()=>{ f.mine=t.dataset.mine; $$('[data-mine]',r).forEach(x=>x.classList.toggle('on',x===t)); onchg&&onchg(); });
 }
 
@@ -1084,10 +1093,11 @@ function fallbackCopy(t,done){ const m=modal(`<h3>Sao chép thủ công</h3><p c
 const TF={}; function timeUI(id,f){ f.tmul=f.tmul||1; TF[id]=f; return `<div class="row" id="${id}" style="margin-top:10px">
   <label class="small">⏱ Thời gian mỗi câu <select data-tm>${[[1,'Bình thường'],[1.5,'Gấp rưỡi (×1,5)'],[2,'Gấp đôi (×2)'],[3,'Gấp ba (×3)']].map(([v,n])=>`<option value="${v}" ${+f.tmul===v?'selected':''}>${n}</option>`).join('')}</select></label>
   <label class="small">🧮 Bài tính <select data-ci><option value="">Trắc nghiệm A B C D</option><option value="1" ${f.calcIn?'selected':''}>Tự điền đáp số</option></select></label>
+  <label class="small">⭐ Ngôi sao hy vọng <select data-st><option value="">Tắt</option><option value="1" ${f.star?'selected':''}>Bật cho bài tính về đích</option></select></label>
   <span class="small muted" style="flex-basis:100%">Bình thường: câu lý thuyết 15–40 giây, bài tính 60–120 giây tuỳ mức. "Tự điền đáp số" chỉ áp dụng cho bài tính.</span></div>`; }
 document.addEventListener('change',e=>{ const sel=e.target; const box=sel.closest&&sel.closest('[id]'); if(!box) return;
   const f=TF[box.id]; if(!f||!['at','ht','tt'].includes(box.id)) return;
-  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; });
+  if(sel.matches('[data-tm]')) f.tmul=+sel.value; if(sel.matches('[data-ci]')) f.calcIn=!!sel.value; if(sel.matches('[data-st]')) f.star=!!sel.value; });
 
 // ===================== NHẠC NỀN · NHẠC CHIẾN THẮNG · LỜI CHÚC MỪNG · PHÁO GIẤY =====================
 // Nhạc tự tổng hợp bằng Web Audio (không dùng bản nhạc có bản quyền). 🎵 bật/tắt nhạc nền, 🔊 bật/tắt hiệu ứng + giọng đọc.
@@ -1148,9 +1158,15 @@ function eloExpected(a,b){ return 1/(1+Math.pow(10,(b-a)/400)); }
 class Match{
   constructor(cfg){ // cfg: {seats:{A1:{..},B1:{..},..}, target, filter, noDraw, onUpdate, onEnd}
     this.cfg=cfg; this.seats=cfg.seats; this.score={A:0,B:0}; this.qi=-1; this.q=null; this.phase='ready';
-    this.cap=cfg.target*2+6; this.timers=[]; this.history=[]; this.deck=makeDeck(cfg.filter,this.cap+20); this.extra=0;
+    this.cap=cfg.target*2+6; this.timers=[]; this.history=[]; this.extra=0; const f=cfg.filter||{};
+    if(f.bank==='mix'){ this.deck=makeDeck(Object.assign({},f,{bank:'khtn'}),this.cap+20); this.cdeck=calcDeck({trs:f.trs,grs:f.grs,lvs:f.clvs},this.cap+20).map(calcToMCQ).map(prep); this.ti=0; this.ci=0; }
+    else this.deck=makeDeck(f,this.cap+20);
+    this.star={A:0,B:0}; this.starOn={};
   }
   team(s){ return s[0]; }
+  finStage(asked){ const t=this.cfg.target, mx=Math.max(this.score.A,this.score.B); return (asked??this.qi)>=this.cap||mx>=t-(t>=7?2:1); }
+  starOK(tm){ const f=this.cfg.filter||{}; return !!(f.star&&this.phase==='q'&&this.q&&this.q.calc&&this.finStage(this.qi)&&!this.star[tm]&&!this.seatIds().some(s=>s[0]===tm&&this.ans[s])); }
+  useStar(tm){ if(!this.starOK(tm)) return false; this.star[tm]=1; this.starOn[tm]=1; try{ fanfare&&DB.sound&&beep(true); }catch(e){} this.upd(); return true; }
   seatIds(){ return Object.keys(this.seats).filter(k=>this.seats[k]); }
   clearT(){ this.timers.forEach(clearTimeout); this.timers=[]; }
   start(){ this.next(); }
@@ -1159,7 +1175,10 @@ class Match{
     const {A,B}=this.score, t=this.cfg.target;
     const asked=this.qi+1;
     if(A>=t||B>=t||(asked>=this.cap&&!(this.cfg.noDraw&&A===B))) return this.finish();
-    this.qi++; this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q;
+    this.qi++; this.starOn={}; this.starMsg='';
+    if(this.cdeck){ const fin=this.finStage(asked); const useC=this.cdeck.length&&(fin||Math.random()<0.2);
+      this.q=useC?this.cdeck[this.ci++%this.cdeck.length]:(this.deck[this.ti++]||prep(pick(pool({})))); }
+    else { this.q=this.deck[this.qi]||prep(pick(pool({}))); if(!this.deck[this.qi]) this.deck[this.qi]=this.q; }
     this.ans={}; this.winner=null; this.phase='q';
     this.limit=qTime(this.q,this.cfg.filter)*1000; this.typed={}; this.deadline=Date.now()+this.limit;
     this.sudden=asked>=this.cap;
@@ -1176,13 +1195,14 @@ class Match{
   answer(seat,c){
     if(this.phase!=='q'||!this.seats[seat]||this.ans[seat]) return;
     const ok=c===this.q.ans; this.ans[seat]={c,ok,t:Date.now()};
-    if(ok){ this.winner=seat; this.score[this.team(seat)]++; beep(true); return this.reveal(); }
+    if(ok){ this.winner=seat; this.score[this.team(seat)]+=this.starOn[this.team(seat)]?2:1; beep(true); return this.reveal(); }
     beep(false);
     // đội có tất cả thành viên đã sai thì không trả lời được nữa; nếu mọi ghế đã trả lời → lộ đáp án
     if(this.seatIds().every(s=>this.ans[s])) return this.reveal();
     this.upd();
   }
   reveal(){ if(this.phase!=='q') return; this.clearT(); this.phase='rev';
+    const msg=[]; ['A','B'].forEach(tm=>{ if(!this.starOn[tm]) return; if(this.winner&&this.winner[0]===tm) msg.push(`⭐ Đội ${tm} đặt ngôi sao hy vọng và trả lời đúng: +2 điểm!`); else { const lost=this.score[tm]>0?1:0; this.score[tm]-=lost; msg.push(`⭐ Đội ${tm} đặt ngôi sao nhưng chưa đúng: ${lost?'−1 điểm':'không bị trừ (đang 0 điểm)'}.`); } }); this.starMsg=msg.join(' ');
     this.history.push({q:this.q,winner:this.winner,ans:this.ans,t0:this.deadline-this.limit});
     this.upd(); this.timers.push(setTimeout(()=>this.next(),this.cfg.revealMs||3200)); }
   finish(){
@@ -1208,6 +1228,9 @@ function renderMatch(el,m,opts={}){
   const ids=m.seatIds(); const q=m.q; const IM=inMode(m)&&m.phase!=='end';
   { const nmT=t=>ids.filter(s=>s[0]===t).map(s=>m.seats[s].name).join(' và '); const two=ids.filter(s=>s[0]==='A').length>1;
     matchMusic(m,m.phase,m.score,m.cfg&&m.cfg.target,m.phase==='end'?(m.result==='D'?'Hai đội hoà nhau. Một trận đấu rất hay!':`Chúc mừng ${two?'đội ':''}${nmT(m.result)} đã chiến thắng!`):''); }
+  const SF=(m.cfg.filter||{}).star; const starBox=t=>{ if(!SF||m.phase==='end') return ''; const on=m.starOn&&m.starOn[t];
+    const btn=m.starOK&&m.starOK(t)&&ids.some(s=>s[0]===t&&m.seats[s].kind==='human')?`<button class="btn sm" style="background:#f2b705;color:#3b2a00;margin-top:4px" data-star="${t}">⭐ Đặt ngôi sao hy vọng</button>`:'';
+    return `<div class="small" style="margin-top:4px">${on?'<b style="color:#c48a00">⭐ ĐANG ĐẶT NGÔI SAO</b>':m.star[t]?'<span class="muted">⭐ đã dùng</span>':'<span class="muted">⭐ còn 1 ngôi sao</span>'}</div>${btn}`; };
   const teamNames=t=>ids.filter(s=>s[0]===t).map(s=>`<span class="seat ${m.ans&&m.ans[s]?(m.ans[s].ok?'ok':'x'):''}">${seatLabel(m.seats[s])}${m.seats[s].kind==='remote'?' 🌐':''}</span>`).join('');
   let body='';
   if(m.phase==='end'){
@@ -1227,10 +1250,11 @@ function renderMatch(el,m,opts={}){
         if(IM) return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b></div><div class="row" style="flex-wrap:nowrap"><input type="text" inputmode="decimal" data-in="${s}" value="${esc(m.typed[s]||'')}" placeholder="Đáp số" ${lk?'disabled':''} style="flex:1;min-width:0;font-size:20px"><button class="btn pri" data-go="${s}" ${lk?'disabled':''}>Gửi</button></div>${m.ans[s]&&!rev?`<div class="small">${m.ans[s].ok?'✅':'❌ Sai rồi'}</div>`:''}</div>`;
         return `<div class="pad ${s[0]} ${lk?'locked':''}"><div class="small"><b>${seatLabel(m.seats[s])}</b> <span class="muted">· phím ${ks.join(' ').toUpperCase()}</span></div><div class="pb">${[0,1,2,3].map(i=>`<button data-s="${s}" data-c="${i}" ${lk?'disabled':''}>${'ABCD'[i]} <span class="small muted">(${ks[i].toUpperCase()})</span></button>`).join('')}</div></div>`; }).join('')}</div>`:''}`;
   }
-  el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div></div>
-    <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div></div></div>${body}
+  el.innerHTML=`<div class="card"><div class="score"><div class="team A"><div class="small">ĐỘI A</div><div class="pts">${m.score.A}</div><div>${teamNames('A')}</div>${starBox('A')}</div>
+    <div class="vs">đến ${m.cfg.target}</div><div class="team B"><div class="small">ĐỘI B</div><div class="pts">${m.score.B}</div><div>${teamNames('B')}</div>${starBox('B')}</div></div>${SF&&m.phase==='q'&&m.q&&m.q.calc&&m.finStage(m.qi)&&(!m.star.A||!m.star.B)?'<div class="small" style="text-align:center;margin:6px 0;color:#9a6b00">🏁 Câu về đích – mỗi đội có 1 ngôi sao hy vọng: đúng +2 điểm, sai −1 điểm. Phải đặt trước khi đội mình trả lời.</div>':''}${m.phase==='rev'&&m.starMsg?`<div class="ex" style="background:#fff6d6">${esc(m.starMsg)}</div>`:''}${body}
     ${m.phase!=='end'?`<div class="row" style="justify-content:flex-end;margin-top:12px">${opts.extra||''}<button class="btn ghost sm" id="mquit">Dừng trận</button></div>`:''}</div>`;
   $$('[data-s]',el).forEach(b=>b.onclick=()=>m.answer(b.dataset.s,+b.dataset.c));
+  $$('[data-star]',el).forEach(b=>b.onclick=()=>m.useStar(b.dataset.star));
   if(IM){ const go=s=>{ const i=$(`[data-in="${s}"]`,el); const val=i?i.value:''; if(!m.answerVal(s,val)) toast('Nhập một con số nhé'); };
     $$('[data-in]',el).forEach(i=>{ i.oninput=()=>{ m.typed[i.dataset.in]=i.value; }; i.onfocus=()=>{ m.focusIn=i.dataset.in; }; i.onkeydown=e=>{ if(e.key==='Enter') go(i.dataset.in); }; });
     $$('[data-go]',el).forEach(b=>b.onclick=()=>go(b.dataset.go));
@@ -1289,7 +1313,7 @@ function viewArena(v){ musicStop();
   $('#anp').onclick=()=>profileDialog(()=>viewArena(v));
   bindFilter('af',ARF);
   $('#ago').onclick=()=>{ const vals=two?{A1:S.A1,A2:S.A2,B1:S.B1,B2:S.B2}:{A1:S.A1,B1:S.B1};
-    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn}}); };
+    startLocalMatch(v,vals,{target:ARF.target,filter:{bank:ARF.bank,chs:ARF.chs,lvs:ARF.lvs,mine:ARF.mine,trs:ARF.trs,grs:ARF.grs,tmul:ARF.tmul,calcIn:ARF.calcIn,clvs:ARF.clvs,star:ARF.star}}); };
 }
 
 // ===================== ĐẤU ONLINE (Firebase Realtime Database) =====================
@@ -1380,18 +1404,19 @@ async function hostStart(v){
   if(!ids.some(s=>s[0]==='A'&&seats[s])||!ids.some(s=>s[0]==='B'&&seats[s])){ toast('Cần người ngồi cả đội A và đội B'); return; }
   const R=roomRef(ON.code); await R.update({st:'play',seats:pub,target:C.target,g:null,a:null,res:null});
   let ansOff=null, curQi=-1;
-  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn},
+  const m=new Match({seats,target:C.target,filter:{bank:C.bank,chs:C.chs,lvs:C.lvs,mine:C.mine,trs:C.trs,grs:C.grs,tmul:C.tmul,calcIn:C.calcIn,clvs:C.clvs,star:C.star},
     onUpdate:mm=>{
       renderMatch(v,mm,{extra:`<span class="chip">Phòng ${ON.code}</span>`,endButtons:`<button class="btn pri" id="hagain">Về sảnh, đấu tiếp</button>`,onQuit:()=>{ R.update({st:'lobby',g:null,a:null}); ON.match=null; hostLobby(v);} });
       if(mm.phase!=='end') animTimer(mm);
       const lock={}; Object.entries(mm.ans||{}).forEach(([s,a])=>lock[s]=a.ok?'ok':'x');
-      const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden};
+      const q=mm.q; const g={ph:mm.phase,qi:mm.qi,sc:mm.score,lock,sud:!!mm.sudden,sf:(mm.cfg.filter||{}).star?1:0,st:{A:mm.star.A?(mm.starOn.A?2:1):0,B:mm.star.B?(mm.starOn.B?2:1):0},se:{A:mm.starOK('A')?1:0,B:mm.starOK('B')?1:0},sm:mm.phase==='rev'?(mm.starMsg||''):''};
       if(q&&mm.phase!=='end'){ g.q={t:q.q,o:q.opts,lv:q.lv,ch:q.ch,inp:inMode(mm)?1:0}; g.rem=Math.max(0,mm.deadline-Date.now()); g.lim=mm.limit; }
       if(mm.phase==='rev'){ g.ans=q.ans; g.ex=q.ex||''; g.win=mm.winner||''; }
       R.child('g').set(g);
       if(mm.phase==='q'&&mm.qi!==curQi){ curQi=mm.qi; if(ansOff) ansOff(); const ar=R.child('a/'+mm.qi);
         const h=ar.on('child_added',s=>{ const val=s.val()||{}; const st=mm.seats[s.key]; if(st&&st.kind==='remote'&&st.uid===val.u&&mm.qi===curQi){ if(val.v!==undefined&&inMode(mm)) mm.answerVal(s.key,val.v); else mm.answer(s.key,+val.c); } });
-        ansOff=()=>ar.off('child_added',h); }
+        const sr=R.child('st/'+mm.qi); const hs=sr.on('child_added',x=>{ const tm=x.key, u=x.val(); if(mm.qi!==curQi) return; if(mm.seatIds().some(s=>s[0]===tm&&mm.seats[s].kind==='remote'&&mm.seats[s].uid===u)) mm.useStar(tm); });
+        ansOff=()=>{ ar.off('child_added',h); sr.off('child_added',hs); }; }
       if(mm.phase==='end'){ const b=$('#hagain',v); if(b) b.onclick=()=>{ ON.match=null; R.update({st:'lobby',g:null,a:null}); hostLobby(v); }; }
     },
     onEnd:mm=>{ if(ansOff) ansOff(); const d={}; Object.entries(mm.delta||{}).forEach(([s,x])=>{ if(mm.seats[s].uid) d[mm.seats[s].uid]=x; });
@@ -1429,7 +1454,8 @@ function guestView(v){
     body=`<div class="champ"><div class="big">${res.r==='D'?'🤝 Hoà':my?(res.r===my?'🏆 Thắng rồi!':'💪 Thua sát nút!'):'Đội '+res.r+' thắng'}</div><p>Tỉ số ${res.sc.A} – ${res.sc.B}</p>${d!==undefined?`<span class="chip">ELO ${d>=0?'+':''}${d} → ${p.elo}</span>`:''}<p class="small muted">Chờ trọng tài mở trận tiếp…</p></div>`; }
   else if(g.q){ const q=g.q, rev=g.ph==='rev'; const mine=mySeat&&g.lock&&g.lock[mySeat]; const picked=ON.myAns[ON.code+':'+g.qi];
     const team=t=>Object.keys(seats).filter(s=>s[0]===t).map(s=>`<span class="seat ${g.lock&&g.lock[s]?(g.lock[s]==='ok'?'ok':'x'):''}">${esc(seats[s].e)} ${esc(seats[s].n)}</span>`).join('');
-    body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}</div></div>
+    const gst=t=>!g.sf?'':`<div class="small">${g.st&&g.st[t]===2?'<b style="color:#c48a00">⭐ ĐANG ĐẶT NGÔI SAO</b>':g.st&&g.st[t]?'<span class="muted">⭐ đã dùng</span>':'<span class="muted">⭐ còn 1 ngôi sao</span>'}</div>${g.se&&g.se[t]&&mySeat&&mySeat[0]===t?`<button class="btn sm" style="background:#f2b705;color:#3b2a00" id="gstar">⭐ Đặt ngôi sao hy vọng</button>`:''}`;
+    body=`<div class="score"><div class="team A"><div class="pts">${g.sc.A}</div>${team('A')}${gst('A')}</div><div class="vs">đến ${r.target}</div><div class="team B"><div class="pts">${g.sc.B}</div>${team('B')}${gst('B')}</div></div>${g.sm?`<div class="ex" style="background:#fff6d6">${esc(g.sm)}</div>`:''}
      ${g.sud?'<div class="tag l3">⚡ Câu hỏi phụ</div>':''}<div class="timer"><i id="gbar" style="width:100%"></i></div>
      <div class="small muted">Câu ${g.qi+1} · ${chIc(q.ch)} ${chName(q.ch)} · <span class="tag ${q.lv>1?'l'+q.lv:''}">${(LEVELS[q.lv]||LEVELS[1]).tag}</span></div><div class="qbox">${esc(q.t)}</div>
      ${q.inp?`<div class="small muted" style="margin:6px 0">✍ Tự tính rồi điền đáp số, bấm Enter.</div>${rev?`<div class="ex">Đáp án đúng: <b>${esc(q.o[g.ans])}</b>${picked!==undefined?` · Bạn điền: ${esc(String(picked))}`:''}</div>`:`<div class="row"><input type="text" inputmode="decimal" id="gin" placeholder="Đáp số" style="flex:1;font-size:20px" ${(!mySeat||mine||picked!==undefined)?'disabled':''} value="${picked!==undefined?esc(String(picked)):''}"><button class="btn pri" id="ggo" ${(!mySeat||mine||picked!==undefined)?'disabled':''}>Gửi</button></div>${mine?`<div class="small">${mine==='ok'?'✅ Đúng':'❌ Sai rồi'}</div>`:''}`}`:''}
@@ -1442,6 +1468,7 @@ function guestView(v){
   const send=c=>{ if(!g||!g.q||g.ph!=='q'||!mySeat) return; const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined) return; ON.myAns[k]=c;
     roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({c,u:FBUID}); guestView(v); };
   $$('[data-c]',v).forEach(b=>b.onclick=()=>send(+b.dataset.c));
+  const gs=$('#gstar',v); if(gs) gs.onclick=()=>{ gs.disabled=true; roomRef(ON.code).child(`st/${g.qi}/${mySeat[0]}`).set(FBUID); };
   const gi=$('#gin',v); if(gi){ const sendV=()=>{ const val=gi.value.trim(); if(!/\d/.test(val)){ toast('Nhập một con số nhé'); return; } const k=ON.code+':'+g.qi; if(ON.myAns[k]!==undefined||g.ph!=='q'||!mySeat) return; ON.myAns[k]=val;
       roomRef(ON.code).child(`a/${g.qi}/${mySeat}`).set({v:val,c:-1,u:FBUID}); guestView(v); };
     gi.onkeydown=e=>{ if(e.key==='Enter') sendV(); }; $('#ggo',v).onclick=sendV; if(!gi.disabled){ gi.value=ON.gtyped&&ON.gtyped.k===ON.code+':'+g.qi?ON.gtyped.v:gi.value; gi.oninput=()=>{ ON.gtyped={k:ON.code+':'+g.qi,v:gi.value}; }; gi.focus(); } }
